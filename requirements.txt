@@ -1,0 +1,63 @@
+# Core
+requests>=2.31.0
+python-dotenv>=1.2.2
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+
+# Google APIs
+gspread>=6.1.0
+google-auth>=2.29.0
+google-api-python-client>=2.130.0
+
+# Google Analytics Data API (optional — only if using GA4)
+google-analytics-data>=0.18.0
+
+# Resilience
+tenacity>=9.0.0
+urllib3>=2.7.0
+
+# Testing
+pytest>=8.0.0
+pytest-mock>=3.14.0
+pytest-cov>=5.0.0
+pytest-asyncio>=0.23.0
+
+# SERP enrichment (optional — Apify Google Search Scraper)
+apify-client>=3.0.0
+
+# Browser automation (BrowserOS client via CDP)
+playwright>=1.40.0
+playwright-stealth>=1.0.0
+
+# Client research (prevents LLM hallucination)
+tavily-python>=0.5.0
+
+# DOCX reports
+python-docx>=1.1.0
+
+# Charts & visualization
+matplotlib>=3.8.0
+
+# PPT reports (optional — for agency deck)
+python-pptx>=0.6.23
+
+# PDF reports
+reportlab>=4.1.0
+
+# HTTP & resilience
+httpx>=0.27.0
+filelock>=3.13.0
+
+# Streamlit UI
+streamlit>=1.35.0
+
+# SEO analysis (Tier 3 fallback — pins strict deps, may conflict with CVE fixes)
+# pyseoanalyzer pinned langchain==0.3.22, lxml==5.3.1, urllib3==2.3.0, dotenv==1.1.0
+# which conflict with security updates above. Install with --no-deps if needed.
+# pyseoanalyzer>=0.1.0
+
+# LLM clients
+groq>=0.9.0
+
+# File uploads (implicit FastAPI dependency for UploadFile)
+python-multipart>=0.0.9
