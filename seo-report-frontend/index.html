@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SEO Autopilot — Technical SEO Audits & Automated Reporting Platform</title>
+<meta name="description" content="Enterprise-grade SEO audit and automated report generation. Zero-credit local analysis, schema validation, AEO/GEO readiness scoring.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<!-- ─── Header ─── -->
+<header>
+  <div class="header-inner">
+    <div class="logo">SEO <span>Autopilot</span></div>
+    <nav>
+      <a class="active" data-tab="home" onclick="showTab('home')">Home</a>
+      <a data-tab="audit" onclick="showTab('audit')">SEO Audit</a>
+      <a data-tab="reports" onclick="showTab('reports')">Monthly Reports</a>
+      <a data-tab="pipeline" onclick="showTab('pipeline')">Pipeline</a>
+      <a data-tab="demo" onclick="showTab('demo')">Demo</a>
+      <a class="demo-btn" data-tab="demo" onclick="showTab('demo'); setTimeout(runDemo, 300)">Try Demo</a>
+    </nav>
+  </div>
+</header>
+
+<!-- ════════════════════════════════════════════ -->
+<!--  TAB: HOME – Landing + Value Grid           -->
+<!-- ════════════════════════════════════════════ -->
+<div id="tab-home" class="tab-content active">
+
+  <div class="hero">
+    <h1>Technical SEO Audits &amp; Automated Report Generation</h1>
+    <p>True authority begins at home. Our multi-tenant agency framework is engineered on absolute local file paths, optimal page-speed metrics, and clean code formatting. We don't just audit optimization rules—we live by them.</p>
+    <div class="hero-actions">
+      <a href="#" id="hero-demo" class="btn btn-primary">View Live Demo</a>
+      <a href="#" id="hero-audit" class="btn btn-outline">Run SEO Audit</a>
+    </div>
+  </div>
+
+  <!-- 8-Point Value Grid -->
+  <section>
+    <h2 class="section-title text-center">Capability Overview</h2>
+    <div class="grid-4">
+      <div class="card-sm">
+        <span class="card-icon-sm">🧩</span>
+        <h4>Semantic Content</h4>
+        <p>Logical header mapping for machine understanding.</p>
+      </div>
+      <div class="card-sm">
+        <span class="card-icon-sm">📐</span>
+        <h4>Schema Layers</h4>
+        <p>Validating JSON-LD, Yoast footprints, and markup.</p>
+      </div>
+      <div class="card-sm">
+        <span class="card-icon-sm">🎯</span>
+        <h4>Intention Control</h4>
+        <p>Isolated topical mapping prevents internal cannibalization.</p>
+      </div>
+      <div class="card-sm">
+        <span class="card-icon-sm">⚡</span>
+        <h4>GEO Engine</h4>
+        <p>Evaluates citation index, source attribution, and relevance.</p>
+      </div>
+      <div class="card-sm">
+        <span class="card-icon-sm">🔗</span>
+        <h4>AEO Readiness</h4>
+        <p>FAQ schema checks to capture voice results.</p>
+      </div>
+      <div class="card-sm">
+        <span class="card-icon-sm">📊</span>
+        <h4>Core Vitals</h4>
+        <p>Sub-second rendering performance tracks real speed.</p>
+      </div>
+      <div class="card-sm">
+        <span class="card-icon-sm">⛓️</span>
+        <h4>Backlink Profiles</h4>
+        <p>Tracking high-authority domain references and link patterns.</p>
+      </div>
+      <div class="card-sm cta-card">
+        <span class="card-icon-sm">🚀</span>
+        <h4>Build Your Topical Authority</h4>
+        <p>Claim your niche footprint and dominate generative AI search results instantly.</p>
+        <a href="#" onclick="showTab('audit');return false" class="btn btn-accent btn-sm" style="margin-top:12px">Start Audit</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ Section -->
+  <div class="faq-section">
+    <h2 class="section-title text-center">AI Search Optimization</h2>
+
+    <div class="faq-item">
+      <button class="faq-question" aria-expanded="false">
+        How does Generative Engine Optimization (GEO) differ from standard indexing?
+        <span class="faq-toggle">▼</span>
+      </button>
+      <div class="faq-answer">
+        <p>Standard search matches literal keyword patterns and index link popularity. Generative Engine Optimization evaluates structural text clarity, information authority density, and answer layout formats. Our framework processes your pages so AI search assistants can parse and cite your brand with ease.</p>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-question" aria-expanded="false">
+        What mechanism avoids internal keyword cannibalization?
+        <span class="faq-toggle">▼</span>
+      </button>
+      <div class="faq-answer">
+        <p>We isolate every client's indexing map into distinct, localized data paths. This structural routing guarantees your internal landing pages never compete against each other for identical keyword intents.</p>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-question" aria-expanded="false">
+        What technical elements does a standard SEO audit examine?
+        <span class="faq-toggle">▼</span>
+      </button>
+      <div class="faq-answer">
+        <p>Every audit examines page titles, meta descriptions, heading hierarchy (H1-H6), image alt attributes, schema markup (JSON-LD, Yoast footprints), HTTP status codes, content word counts, thin content detection, and structured data validation. Results include severity ratings and prioritized remediation.</p>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-question" aria-expanded="false">
+        How does the platform ensure data accuracy without fabricating metrics?
+        <span class="faq-toggle">▼</span>
+      </button>
+      <div class="faq-answer">
+        <p>Every data point carries source attribution—specifying where the value was obtained, how it was measured, and a confidence indicator. If a metric cannot be verified, it is explicitly marked rather than estimated. Sections with insufficient data are omitted entirely rather than filled with assumptions.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<!--  TAB: AUDIT – Two-Column Layout              -->
+<!-- ════════════════════════════════════════════ -->
+<div id="tab-audit" class="tab-content">
+  <div class="audit-layout">
+
+    <!-- Left: 60% – Inputs + Progress + Results -->
+    <div class="audit-left">
+      <h2 class="section-title" style="margin-bottom:4px">Technical SEO Audit</h2>
+      <p class="section-sub" style="margin-bottom:24px">Submit any public URL for a full technical analysis. Results include metadata validation, heading structure, schema detection, and prioritized remediation.</p>
+
+      <div class="card" style="padding:24px">
+        <form id="audit-form">
+          <div class="form-group">
+            <label for="audit-url">Website URL *</label>
+            <input type="url" id="audit-url" placeholder="https://example.com" required>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="audit-mode">Crawl Depth</label>
+              <select id="audit-mode">
+                <option value="single">Single Page Analysis</option>
+                <option value="full">Full Sitemap Crawl</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="audit-month">Reporting Period</label>
+              <input type="text" id="audit-month" placeholder="June 2026" value="June 2026">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="audit-sheet">Supplemental Data Sheet (optional)</label>
+            <input type="url" id="audit-sheet" placeholder="https://docs.google.com/spreadsheets/...">
+          </div>
+
+          <button type="submit" class="btn btn-accent mt-8">Run Full Audit Pipeline</button>
+        </form>
+      </div>
+
+      <div id="audit-status" class="status-msg info mt-16">Enter a URL and submit to begin the audit.</div>
+
+      <!-- Processing Progress Buffer -->
+      <div id="audit-progress-container" class="progress-container">
+        <div class="progress-bar"><div id="audit-progress-fill" class="progress-fill"></div></div>
+        <div id="audit-progress-msg" class="progress-msg"></div>
+      </div>
+
+      <!-- Results (hidden until complete) -->
+      <div id="audit-results" class="results-box">
+        <!-- Metrics bar injected by JS -->
+        <div id="audit-metrics-bar" class="demo-metrics" style="display:none"></div>
+        <h3 style="color:var(--navy);margin-top:8px;margin-bottom:12px">Technical SEO Audit Report</h3>
+        <ul id="audit-files" class="file-list"></ul>
+      </div>
+    </div>
+
+    <!-- Right: 40% – Website Preview HUD -->
+    <div class="audit-right">
+      <div class="preview-frame">
+        <!-- Anti-leakage wrapper: forces all content inside this frame to stay within bounds -->
+        <div style="width:100%;max-width:100%;overflow-x:hidden;box-sizing:border-box;word-break:break-all">
+          <div class="preview-bar">
+            <div class="preview-dots">
+              <span class="preview-dot r"></span>
+              <span class="preview-dot y"></span>
+              <span class="preview-dot g"></span>
+            </div>
+            <div class="preview-url" id="preview-url">https://</div>
+          </div>
+          <div id="preview-empty" class="preview-body empty-state">
+            <div>
+              <div class="preview-icon">🔍</div>
+              <h4>Awaiting Target URL Input...</h4>
+              <p>Template Frame Clear. Enter a URL or run the demo to populate parsed data.</p>
+            </div>
+          </div>
+          <div id="preview-meta" class="preview-body" style="display:none">
+            <div style="margin-bottom:16px;word-wrap:break-word;white-space:normal;max-width:100%">
+              <div style="font-size:16px;font-weight:700;color:var(--navy)" id="preview-title">—</div>
+              <div style="font-size:12px;color:var(--gray);margin-top:4px" id="preview-desc">—</div>
+            </div>
+            <div class="preview-meta">
+              <div class="preview-meta-row">
+                <span class="preview-meta-label">Site URL</span>
+                <span class="preview-meta-value" id="preview-siteurl">—</span>
+              </div>
+              <div class="preview-meta-row">
+                <span class="preview-meta-label">Business Niche</span>
+                <span class="preview-meta-value" id="preview-niche">—</span>
+              </div>
+              <div class="preview-meta-row">
+                <span class="preview-meta-label">Technical Health</span>
+                <span class="preview-meta-value" id="preview-health">—</span>
+              </div>
+              <div class="preview-meta-row">
+                <span class="preview-meta-label">Pages Analyzed</span>
+                <span class="preview-meta-value" id="preview-pages">—</span>
+              </div>
+              <div class="preview-meta-row">
+                <span class="preview-meta-label">Missing H1</span>
+                <span class="preview-meta-value" id="preview-missing-h1">—</span>
+              </div>
+              <div class="preview-meta-row">
+                <span class="preview-meta-label">Missing Meta</span>
+                <span class="preview-meta-value" id="preview-missing-meta">—</span>
+              </div>
+              <div class="preview-meta-row">
+                <span class="preview-meta-label">Images Found</span>
+                <span class="preview-meta-value" id="preview-images-found">—</span>
+              </div>
+              <div class="preview-meta-row">
+                <span class="preview-meta-label">Missing Alt</span>
+                <span class="preview-meta-value" id="preview-missing-alt">—</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Audit Philosophy & Approach – positioned below the 2-col container -->
+  <section>
+    <h2 style="text-align:center;font-size:28px;font-weight:700;color:var(--navy);margin-bottom:8px">Audit Philosophy &amp; Approach</h2>
+    <p style="text-align:center;color:var(--gray);font-size:16px;max-width:700px;margin:0 auto 40px">Search is no longer just keywords and backlinks. Modern visibility depends on how well your content serves both human readers and AI-generated answer engines. Our methodology bridges that gap.</p>
+    <div class="grid-3">
+      <div class="card">
+        <div class="card-icon" style="background:rgba(37,99,235,0.1);color:var(--accent)">🧩</div>
+        <h3>Semantic Content Architecture</h3>
+        <p>Headings, subheadings, and content blocks must form a coherent topical map. Search engines and AI models read your page structure before they read your words. We audit for logical hierarchy, not just keyword density.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background:rgba(20,184,166,0.1);color:var(--teal)">📐</div>
+        <h3>Schema-First Structured Data</h3>
+        <p>JSON-LD markup, Yoast footprints, and semantic schemas tell machines what your content means. Without them, even the best writing remains invisible to generative answer engines. Every audit validates your markup layer.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background:rgba(245,158,11,0.1);color:var(--amber)">🎯</div>
+        <h3>Keyword Cannibalization Prevention</h3>
+        <p>Each client campaign is isolated into an independent topical hub with distinct URL-to-topic mappings. This prevents internal pages from competing against each other for the same search intent and keeps query routing clean.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background:rgba(22,163,74,0.1);color:var(--green)">⚡</div>
+        <h3>Generative Engine Optimization (GEO)</h3>
+        <p>Traditional indexing ranks pages. Generative engines synthesize answers. Our audits evaluate your content's citability—clear source attribution, direct answer structures, and contextual relevance that AI models can parse reliably.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background:rgba(15,39,71,0.1);color:var(--navy)">🔗</div>
+        <h3>Answer Engine Readiness (AEO)</h3>
+        <p>Voice searches and AI chat interfaces pull answers from well-structured content blocks. We check for FAQ schemas, concise definitions, and Q&A formatting that help your brand appear in zero-click results and AI citations.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background:rgba(220,38,38,0.1);color:var(--red)">📊</div>
+        <h3>Performance &amp; Rendering Profiles</h3>
+        <p>Core Web Vitals, mobile responsiveness, and render-blocking resources directly impact both user experience and search visibility. Our audits measure real page speed metrics against current industry benchmarks.</p>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<!--  TAB: REPORTS – Monthly SEO Report           -->
+<!-- ════════════════════════════════════════════ -->
+<div id="tab-reports" class="tab-content">
+  <div class="audit-layout">
+
+    <!-- Left: 60% – Inputs + Generate + Results -->
+    <div class="audit-left">
+      <h2 class="section-title" style="margin-bottom:4px">Monthly SEO Report</h2>
+      <p class="section-sub" style="margin-bottom:24px">Generate a full executive-facing monthly SEO report with rankings, GSC data, backlink analysis, and recommendations. All three deliverables are produced in one run.</p>
+
+      <div class="card" style="padding:24px">
+        <form id="report-form">
+          <div class="form-group">
+            <label for="report-url">Client Website URL *</label>
+            <input type="url" id="report-url" placeholder="https://example.com" required>
+          </div>
+          <div class="form-group">
+            <label for="report-month">Reporting Period</label>
+            <input type="text" id="report-month" placeholder="June 2026" value="June 2026">
+          </div>
+          <div class="form-group">
+            <label for="report-sheet">Google Sheet with Rankings (optional)</label>
+            <input type="url" id="report-sheet" placeholder="https://docs.google.com/spreadsheets/...">
+          </div>
+          <button type="button" class="btn btn-accent mt-8" onclick="runReport()">Generate Monthly Report</button>
+        </form>
+      </div>
+
+      <div id="report-status" class="status-msg info mt-16">Enter a client URL and submit to begin report generation.</div>
+
+      <div id="report-progress-container" class="progress-container">
+        <div class="progress-bar"><div id="report-progress-fill" class="progress-fill"></div></div>
+        <div id="report-progress-msg" class="progress-msg"></div>
+      </div>
+
+      <!-- Results (hidden until complete) -->
+      <div id="report-results" class="results-box">
+        <h3 style="color:var(--navy);margin-top:8px;margin-bottom:12px">Generated Documents</h3>
+        <ul id="report-files" class="file-list"></ul>
+      </div>
+    </div>
+
+    <!-- Right: 40% – Deliverable Overview -->
+    <div class="audit-right">
+      <div class="preview-frame">
+        <div style="padding:24px">
+          <h3 style="color:var(--navy);font-size:18px;margin-bottom:16px">Three Deliverables</h3>
+
+          <div style="background:rgba(15,39,71,0.04);border-radius:10px;padding:16px;margin-bottom:16px">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+              <span style="font-size:24px">📄</span>
+              <div><strong style="color:var(--navy)">Monthly SEO Report</strong><br><span style="font-size:12px;color:var(--gray)">Executive-facing, full narrative</span></div>
+            </div>
+            <ul style="font-size:12px;color:var(--body);padding-left:18px;line-height:1.8">
+              <li>Keyword rankings &amp; movements</li>
+              <li>GSC performance trends</li>
+              <li>Backlink &amp; authority profile</li>
+              <li>Local SEO (GMB) insights</li>
+              <li>Press coverage &amp; off-page</li>
+            </ul>
+          </div>
+
+          <div style="background:rgba(37,99,235,0.04);border-radius:10px;padding:16px;margin-bottom:16px">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+              <span style="font-size:24px">🛡️</span>
+              <div><strong style="color:var(--navy)">Technical SEO Audit</strong><br><span style="font-size:12px;color:var(--gray)">One-shot technical deep dive</span></div>
+            </div>
+            <ul style="font-size:12px;color:var(--body);padding-left:18px;line-height:1.8">
+              <li>Core SEO metrics (title, H1, meta)</li>
+              <li>Core Web Vitals scores</li>
+              <li>Internal link health</li>
+              <li>Backlink profile</li>
+              <li>Issues log with severity</li>
+            </ul>
+          </div>
+
+          <div style="background:rgba(22,163,74,0.04);border-radius:10px;padding:16px">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+              <span style="font-size:24px">📋</span>
+              <div><strong style="color:var(--navy)">SEO Action Plan</strong><br><span style="font-size:12px;color:var(--gray)">Internal team roadmap</span></div>
+            </div>
+            <ul style="font-size:12px;color:var(--body);padding-left:18px;line-height:1.8">
+              <li>P0 critical fixes</li>
+              <li>P1 high-priority tasks</li>
+              <li>P2 sprint items</li>
+              <li>Team assignments &amp; ETA</li>
+            </ul>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<!--  TAB: PIPELINE – SEO Automation Brainstorming -->
+<!-- ════════════════════════════════════════════ -->
+<div id="tab-pipeline" class="tab-content">
+  <section>
+    <h2 class="section-title text-center">SEO Automation Pipeline</h2>
+    <p class="section-sub centered"><strong id="brainstorm-count">Loading ideas...</strong></p>
+
+    <div class="brainstorm-filters">
+      <select id="brainstorm-phase" class="brainstorm-select">
+        <option value="all">All Phases</option>
+        <option value="empathize">🔍 Empathize</option>
+        <option value="define">🎯 Define</option>
+        <option value="ideate">💡 Ideate</option>
+        <option value="prototype">⚙️ Prototype</option>
+        <option value="test">📊 Test</option>
+      </select>
+      <select id="brainstorm-category" class="brainstorm-select">
+        <option value="all">All Categories</option>
+        <option value="keyword-intelligence">Keyword Intelligence</option>
+        <option value="content-automation">Content Automation</option>
+        <option value="technical-seo">Technical SEO</option>
+        <option value="link-building">Link Building</option>
+        <option value="analytics-reporting">Analytics &amp; Reporting</option>
+        <option value="local-seo">Local SEO</option>
+        <option value="workflow-orchestration">Workflow Orchestration</option>
+        <option value="ai-strategy">AI-Powered Strategy</option>
+      </select>
+    </div>
+
+    <div id="brainstorm-list" class="brainstorm-grid"></div>
+  </section>
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<!--  TAB: DEMO – Test Any URL                    -->
+<!-- ════════════════════════════════════════════ -->
+<div id="tab-demo" class="tab-content">
+  <section>
+    <div class="demo-badge">⚡ Instant Live Audit — Any URL</div>
+    <h2 class="section-title">Live SEO Audit — Test Any Website</h2>
+    <p class="section-sub">Enter any URL to run a real-time technical SEO audit with Playwright rendering, PageSpeed Insights, backlink analysis, and niche classification.</p>
+
+    <div class="flex mt-16" style="gap:12px;flex-wrap:wrap;max-width:600px;margin:0 auto 20px">
+      <input id="demo-url" type="url" value="https://www.joinabound.com"
+             placeholder="https://example.com"
+             style="flex:1;min-width:240px;padding:12px 16px;border:1px solid var(--border);border-radius:8px;font-size:15px">
+      <button class="btn btn-accent" onclick="runDemo()">🔍 Run Audit</button>
+    </div>
+
+    <div id="demo-status" class="status-msg info">Enter a URL and click "Run Audit" to begin.</div>
+
+    <div id="demo-progress-container" class="progress-container">
+      <div class="progress-bar"><div id="demo-progress-fill" class="progress-fill"></div></div>
+      <div id="demo-progress-msg" class="progress-msg"></div>
+    </div>
+
+    <div id="demo-metrics" class="demo-metrics" style="display:none"></div>
+
+    <div id="demo-results" class="results-box">
+      <h3 style="color:var(--navy);margin-top:24px;margin-bottom:12px">Next Actions</h3>
+      <div style="padding:16px;background:rgba(245,158,11,0.06);border-radius:8px;border:1px solid rgba(245,158,11,0.15)">
+        <ul style="font-size:13px;line-height:1.8;padding-left:20px;color:var(--body)">
+          <li><strong>P1 — High Priority:</strong> Identify low-hanging fruit keywords in positions 4-15 for targeted content optimization. <em style="color:var(--gray)">(ETA: Week 2)</em></li>
+          <li><strong>P2 — Medium Priority:</strong> Audit backlink profile and map out high-authority link-building outreach opportunities. <em style="color:var(--gray)">(ETA: Week 3)</em></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ─── Footer ─── -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <h3>SEO Autopilot</h3>
+      <p>Enterprise-grade technical SEO audit and automated report generation platform. Built for digital agencies, account managers, and in-house marketing teams who demand accuracy, transparency, and actionable insights.</p>
+    </div>
+    <div class="footer-col">
+      <h4>Explore</h4>
+      <a onclick="showTab('home');return false">Home</a>
+      <a onclick="showTab('audit');return false">SEO Audit</a>
+      <a onclick="showTab('reports');return false">Monthly Reports</a>
+      <a onclick="showTab('demo');return false">Live Demo</a>
+    </div>
+    <div class="footer-col">
+      <h4>Resources</h4>
+      <a href="https://developers.google.com/search/docs/fundamentals/seo-starter-guide" target="_blank">SEO Guide</a>
+      <a href="https://web.dev/vitals/" target="_blank">Core Web Vitals</a>
+      <a href="https://schema.org" target="_blank">Schema.org</a>
+      <a href="https://search.google.com/search-console" target="_blank">Search Console</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    &copy; 2026 SEO Autopilot &middot; All rights reserved &middot; Built for precision, transparency, and measurable results
+  </div>
+</footer>
+
+<script src="/js/api-client.js"></script>
+<script src="/js/brainstorm-data.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,67 @@
+{
+  "title": "SEO Autopilot Overview",
+  "version": 1,
+  "panels": [
+    {
+      "title": "Request Rate",
+      "type": "graph",
+      "targets": [
+        {
+          "expr": "rate(http_requests_total[5m])",
+          "legendFormat": "{{route}}"
+        }
+      ]
+    },
+    {
+      "title": "Error Rate",
+      "type": "graph",
+      "targets": [
+        {
+          "expr": "rate(http_errors_total[5m])",
+          "legendFormat": "{{status}}"
+        }
+      ]
+    },
+    {
+      "title": "Queue Depth",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "arq_queue_length"
+        }
+      ]
+    },
+    {
+      "title": "DOCX Verifier Score (7d avg)",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "avg(docx_verifier_score) over last 7d"
+        }
+      ]
+    },
+    {
+      "title": "Job Duration (p50/p95)",
+      "type": "graph",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, rate(job_duration_seconds_bucket[5m]))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(job_duration_seconds_bucket[5m]))",
+          "legendFormat": "p95"
+        }
+      ]
+    },
+    {
+      "title": "PSI Rate Limit Events",
+      "type": "graph",
+      "targets": [
+        {
+          "expr": "rate(psi_rate_limited_total[5m])"
+        }
+      ]
+    }
+  ]
+}

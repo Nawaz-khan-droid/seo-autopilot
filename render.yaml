@@ -1,0 +1,51 @@
+services:
+  - type: web
+    name: seo-autopilot-api
+    env: docker
+    dockerfilePath: ./Dockerfile
+    repo: https://github.com/Nawaz-khan-droid/seo-autopilot
+    branch: main
+    healthCheckPath: /health
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: SERPAPI_KEY
+        sync: false
+      - key: PAGESPEED_API_KEY
+        sync: false
+      - key: CREDENTIALS_PATH
+        value: secrets/credentials.json
+      - key: SHEET_NAME
+        value: Keyword Tracker
+      - key: GSC_SITE_URL
+        sync: false
+      - key: GA4_PROPERTY_ID
+        sync: false
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: SEARCHAPI_API_KEY
+        sync: false
+      - key: APIFY_API_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: FIRECRAWL_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SSL_CERT
+        sync: false
+      - key: UPSTASH_REDIS_URL
+        sync: false
+      - key: UPSTASH_REDIS_TOKEN
+        sync: false
+      - key: OTEL_SERVICE_NAME
+        value: seo-autopilot
+      - key: OTEL_EXPORTER_OTLP_ENDPOINT
+        sync: false
+      - key: OTEL_EXPORTER_OTLP_HEADERS
+        sync: false
+      - key: OTEL_EXPORTER_OTLP_PROTOCOL
+        value: http/protobuf
