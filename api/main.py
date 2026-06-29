@@ -21,7 +21,9 @@ import logging
 import os
 import re
 import sys
+import threading
 import time
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -121,6 +123,27 @@ if not API_AUTH_KEY:
         "API_AUTH_KEY is not set — all /api/ endpoints are publicly accessible. "
         "Set API_AUTH_KEY in .env for production."
     )
+
+
+# ── Background job store (for long-running audits behind Codespaces proxy) ──
+
+_jobs: dict[str, dict[str, Any]] = {}
+_jobs_lock = threading.Lock()
+
+def _job_set(job_id: str, **kwargs: Any) -> None:
+    with _jobs_lock:
+        _jobs[job_id] = {**_jobs.get(job_id, {}), **kwargs, "updated_at": time.time()}
+
+def _job_get(job_id: str) -> dict[str, Any] | None:
+    with _jobs_lock:
+        return _jobs.get(job_id)
+
+def _job_cleanup() -> None:
+    cutoff = time.time() - 3600
+    with _jobs_lock:
+        stale = [k for k, v in _jobs.items() if v.get("updated_at", 0) < cutoff]
+        for k in stale:
+            del _jobs[k]
 
 
 # ── Idempotency cache (JSON, 1h TTL) ──
@@ -552,17 +575,30 @@ async def run_audit(body: dict[str, Any], request: Request):
     return result
 
 
-# ── Demo endpoint — run audit on any URL ──
+# ── Demo endpoint — run audit on any URL (background job + polling) ──
+
+def _run_demo_background(job_id: str, url: str) -> None:
+    """Run the audit in a background thread so Codespaces proxy doesn't drop."""
+    from api.audit_workflow import run_audit as _run_audit
+    try:
+        _job_set(job_id, status="running", progress="Crawling site...")
+        result = _run_audit(url)
+        metrics = result.get("metrics", {})
+        _job_set(job_id, status="done", result={
+            "success": result.get("success", False),
+            "client": result.get("client", url),
+            "month": result.get("month", "June 2026"),
+            "metrics": metrics,
+            "niche": result.get("niche", "—"),
+        })
+    except Exception as e:
+        logger.exception("Demo audit failed for %s", url)
+        _job_set(job_id, status="error", error=str(e))
+
 
 @app.post("/api/demo/generate")
 async def demo_generate(payload: dict | None = None, request: Request = None):
-    """Run an SEO audit on the provided URL (default: beautifulindia.com).
-
-    Accepts optional JSON body: {"url": "https://example.com"}
-    Returns full audit metrics + memory with refined niche.
-    """
-    from api.audit_workflow import run_audit as _run_audit
-
+    """Start a background audit job. Returns job_id immediately for polling."""
     if request and request.client:
         if not rate_limiter.check(request.client.host):
             raise RateLimitError("Rate limit exceeded — try again in 60 seconds")
@@ -571,24 +607,27 @@ async def demo_generate(payload: dict | None = None, request: Request = None):
     url = body.get("url", "").strip() or "https://www.beautifulindia.com"
     _validate_url_not_private(url)
 
-    loop = asyncio.get_event_loop()
-    try:
-        result = await asyncio.wait_for(
-            loop.run_in_executor(None, _run_audit, url),
-            timeout=120.0,
-        )
-    except asyncio.TimeoutError:
-        raise AuditTimeoutError("Audit timed out — try a simpler URL")
+    job_id = uuid.uuid4().hex[:16]
+    _job_cleanup()
+    _job_set(job_id, status="queued", url=url, progress="Starting audit...")
 
-    metrics = result.get("metrics", {})
+    t = threading.Thread(target=_run_demo_background, args=(job_id, url), daemon=True)
+    t.start()
 
-    return {
-        "success": result.get("success", False),
-        "client": result.get("client", url),
-        "month": result.get("month", "June 2026"),
-        "metrics": metrics,
-        "niche": result.get("niche", "—"),
-    }
+    return {"job_id": job_id, "status": "queued"}
+
+
+@app.get("/api/demo/status/{job_id}")
+async def demo_status(job_id: str):
+    """Poll for background audit job result."""
+    job = _job_get(job_id)
+    if not job:
+        raise NotFoundError(f"Job {job_id} not found")
+    if job["status"] == "done":
+        return {"status": "done", "result": job["result"]}
+    if job["status"] == "error":
+        return {"status": "error", "error": job.get("error", "Unknown error")}
+    return {"status": job["status"], "progress": job.get("progress", "")}
 
 
 # ── File upload endpoint for monthly reports ──

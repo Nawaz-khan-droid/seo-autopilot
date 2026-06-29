@@ -50,6 +50,29 @@ const API = {
     return r.json();
   },
 
+  async pollDemoStatus(jobId) {
+    const r = await fetch(this.BASE_URL + '/api/demo/status/' + jobId);
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${r.status}`);
+    }
+    return r.json();
+  },
+
+  async runDemoWithPolling(url, onProgress, maxWaitMs = 300000) {
+    const start = await this.fetchDemo(url);
+    const jobId = start.job_id;
+    const deadline = Date.now() + maxWaitMs;
+    while (Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      const poll = await this.pollDemoStatus(jobId);
+      if (poll.status === 'done') return poll.result;
+      if (poll.status === 'error') throw new Error(poll.error || 'Audit failed');
+      if (onProgress) onProgress(poll.progress || 'Processing...');
+    }
+    throw new Error('Audit timed out after 5 minutes');
+  },
+
   downloadUrl(filename) {
     return this.BASE_URL + '/api/reports/download/' + encodeURIComponent(filename);
   },

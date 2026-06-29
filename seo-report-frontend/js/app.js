@@ -185,8 +185,10 @@ async function runDemo() {
   const timer = cycleProgressMessage(messages, 3000, 'demo-');
 
   try {
-    showProgress(30, 'demo-');
-    const data = await API.fetchDemo(url);
+    showProgress(10, 'demo-');
+    const data = await API.runDemoWithPolling(url, (progress) => {
+      document.getElementById('demo-progress-msg').textContent = progress;
+    });
     showProgress(80, 'demo-');
     if (timer) clearInterval(timer);
 
