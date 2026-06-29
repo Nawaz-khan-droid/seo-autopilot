@@ -98,6 +98,52 @@ function resetPreview() {
 
 /* ── Initialization ── */
 document.addEventListener('DOMContentLoaded', () => {
+  /* Mobile nav toggle */
+  const navToggle = document.getElementById('nav-toggle');
+  const mainNav = document.getElementById('main-nav');
+  if (navToggle && mainNav) {
+    navToggle.addEventListener('click', () => {
+      navToggle.classList.toggle('open');
+      mainNav.style.display = navToggle.classList.contains('open') ? 'flex' : '';
+      if (navToggle.classList.contains('open')) {
+        mainNav.style.flexDirection = 'column';
+        mainNav.style.position = 'absolute';
+        mainNav.style.top = '56px';
+        mainNav.style.left = '0';
+        mainNav.style.right = '0';
+        mainNav.style.background = '#fff';
+        mainNav.style.padding = '8px 16px';
+        mainNav.style.borderBottom = '1px solid var(--border)';
+        mainNav.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
+        mainNav.style.zIndex = '99';
+      }
+    });
+    /* Close nav when a link is clicked */
+    mainNav.querySelectorAll('a').forEach(a => {
+      a.addEventListener('click', () => {
+        navToggle.classList.remove('open');
+        mainNav.style.display = '';
+        mainNav.style.flexDirection = '';
+        mainNav.style.position = '';
+        mainNav.style.top = '';
+        mainNav.style.left = '';
+        mainNav.style.right = '';
+        mainNav.style.background = '';
+        mainNav.style.padding = '';
+        mainNav.style.borderBottom = '';
+        mainNav.style.boxShadow = '';
+        mainNav.style.zIndex = '';
+      });
+    });
+    /* Auto-close on resize to desktop */
+    window.addEventListener('resize', () => {
+      if (window.innerWidth >= 900) {
+        navToggle.classList.remove('open');
+        mainNav.style.cssText = '';
+      }
+    });
+  }
+
   /* FAQ accordion */
   document.querySelectorAll('.faq-question').forEach(q => {
     q.addEventListener('click', () => {
