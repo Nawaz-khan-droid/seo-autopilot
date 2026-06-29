@@ -115,10 +115,9 @@ class RequestIDMiddleware:
             await self.app(scope, receive, send)
             return
 
-        headers = dict(scope.get("headers", []))
         req_id: str | None = None
 
-        for key, val in headers:
+        for key, val in scope.get("headers", []):
             if key == b"x-request-id":
                 req_id = val.decode("utf-8", errors="replace").strip()
                 break
