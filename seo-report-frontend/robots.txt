@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://seo-autopilot-testing.vercel.app/sitemap.xml
