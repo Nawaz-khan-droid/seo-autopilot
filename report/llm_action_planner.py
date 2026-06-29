@@ -7,9 +7,10 @@ instructions define *how* to produce the deliverable.
 
 Pipeline:
   1. Serialise ``ReportFacts`` → structured JSON (omitting empty Evidence)
-  2. Build system prompt = instructions (code) + skill reference (file)
-  3. Call OpenRouter GPT 120B (fallback → Groq → deterministic generator)
-  4. Parse & validate JSON response
+  2. Apply token budget — truncate facts if too large for context window
+  3. Build system prompt = instructions (code) + skill reference (file)
+  4. Call OpenRouter GPT 120B (fallback → Groq → deterministic generator)
+  5. Parse & validate JSON response
 """
 
 from __future__ import annotations
@@ -30,6 +31,10 @@ DEFAULT_MODEL = "openai/gpt-oss-120b"        # GPT 120B on OpenRouter
 FALLBACK_MODEL = "llama-3.3-70b-versatile"   # Groq fallback
 MAX_TOKENS = 4096
 TEMPERATURE = 0.3
+
+# Token budget: reserve 2000 tokens for system prompt + response overhead
+# The rest is available for input facts data
+_MAX_INPUT_CHARS = 7000  # ~1750 tokens at ~4 chars/token, well under 8k context
 
 
 # ---------------------------------------------------------------------------
@@ -473,6 +478,62 @@ def _parse_response(text: str) -> list[dict[str, Any]]:
 # 5. Main entry point
 # ---------------------------------------------------------------------------
 
+def _truncate_facts_to_budget(data: dict[str, Any], max_chars: int = _MAX_INPUT_CHARS) -> dict[str, Any]:
+    """Truncate large arrays in facts data to fit within token budget.
+
+    Preserves high-value fields (CWVs, KPIs, scores) while trimming
+    verbose arrays (rankings, issues_list, top_backlinks).
+    """
+    truncated = dict(data)
+    char_count = len(json.dumps(truncated, default=str))
+
+    if char_count <= max_chars:
+        return truncated
+
+    logger.warning("Facts data %d chars exceeds budget %d — truncating", char_count, max_chars)
+
+    # Trim rankings to top 20
+    if "rankings" in truncated and len(truncated["rankings"]) > 20:
+        truncated["rankings"] = truncated["rankings"][:20]
+        truncated["_rankings_truncated"] = len(truncated["rankings"])
+
+    char_count = len(json.dumps(truncated, default=str))
+    if char_count <= max_chars:
+        return truncated
+
+    # Trim issues_list
+    if truncated.get("technical", {}).get("issues_list"):
+        tech = dict(truncated["technical"])
+        if len(tech["issues_list"]) > 10:
+            tech["issues_list"] = tech["issues_list"][:10]
+            tech["_issues_truncated"] = True
+        truncated["technical"] = tech
+
+    char_count = len(json.dumps(truncated, default=str))
+    if char_count <= max_chars:
+        return truncated
+
+    # Trim backlinks
+    if truncated.get("backlinks", {}).get("top_backlinks"):
+        bl = dict(truncated["backlinks"])
+        if len(bl.get("top_backlinks", [])) > 5:
+            bl["top_backlinks"] = bl["top_backlinks"][:5]
+        truncated["backlinks"] = bl
+
+    char_count = len(json.dumps(truncated, default=str))
+    if char_count <= max_chars:
+        return truncated
+
+    # Final fallback: remove verbose arrays entirely
+    for key in ("seo_activities_completed", "press_coverages", "social_bookmarks",
+                 "image_submissions", "video_submissions"):
+        truncated.pop(key, None)
+
+    logger.warning("Facts final size: %d chars (after aggressive truncation)",
+                    len(json.dumps(truncated, default=str)))
+    return truncated
+
+
 def generate_llm_action_plan(facts: ReportFacts) -> list[ActionItem]:
     """Generate action items using the LLM (GPT 120B) SEO skill.
 
@@ -485,6 +546,9 @@ def generate_llm_action_plan(facts: ReportFacts) -> list[ActionItem]:
         logger.info("No audit data available — falling back to deterministic generator")
         return _fallback(facts)
 
+    # Apply token budget
+    data = _truncate_facts_to_budget(data)
+
     system_prompt = _build_system_prompt()
     user_prompt = (
         "Generate an SEO action plan for this client based on the following "
@@ -492,6 +556,10 @@ def generate_llm_action_plan(facts: ReportFacts) -> list[ActionItem]:
         f"{json.dumps(data, indent=2, default=str)}\n\n"
         "Return ONLY a JSON array of action items."
     )
+
+    input_chars = len(system_prompt) + len(user_prompt)
+    logger.info("LLM action planner: input size ~%d chars (~%d tokens)",
+                input_chars, input_chars // 4)
 
     # Try OpenRouter GPT 120B first
     logger.info("LLM action planner: calling OpenRouter GPT 120B")

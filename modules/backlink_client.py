@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-import httpx
+from modules.http_pool import sync_client
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +153,7 @@ def _fetch_openpagerank(domain: str) -> dict[str, Any] | None:
     try:
         params = {"domains[]": domain}
         headers = {"API-Key": key, "Accept": "application/json"}
-        resp = httpx.get(OPR_API, params=params, headers=headers, timeout=10)
+        resp = sync_client().get(OPR_API, params=params, headers=headers, timeout=10)
         if resp.status_code != 200:
             logger.info("OpenPageRank returned HTTP %d for %s", resp.status_code, domain)
             return None

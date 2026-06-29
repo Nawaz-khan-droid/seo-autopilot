@@ -14,18 +14,20 @@ Data sources (in priority order):
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import hmac
+import json
 import logging
 import os
 import re
 import sys
 import time
-from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-
 from urllib.parse import urlparse
+
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -34,7 +36,16 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from api.errors import (
+    AppError, RateLimitError, AuditTimeoutError, ValidationError,
+    NotFoundError, AuthError, ProviderUnavailable, DataUnavailable,
+    RequestIDMiddleware, current_request_id,
+)
+from api.rate_limiter import rate_limiter
+from config.sheet_schema import TabName, TAB_TO_KEY
+from modules.http_pool import sync_client, async_client, close_clients
 from modules.logger_config import setup_logging
+
 setup_logging(level=logging.INFO)
 
 from config.settings import (
@@ -47,10 +58,18 @@ from report.docx_technical_audit import build_technical_audit
 
 logger = logging.getLogger(__name__)
 
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    yield
+    logger.info("Shutting down — closing HTTP connections and Playwright browsers")
+    await close_clients()
+
+
 app = FastAPI(
     title="SEO Autopilot API",
     version="1.0.0",
     description="Generate client-ready SEO reports and internal action plans.",
+    lifespan=_lifespan,
 )
 
 # Parse CORS origins from env (comma-separated), filter empties
@@ -62,6 +81,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ── Request ID middleware — injected before all other middleware ──
+
+app.add_middleware(RequestIDMiddleware)
 
 
 # ── API Key Authentication Middleware ──
@@ -86,7 +110,7 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         if path.startswith("/api/"):
             api_key = request.headers.get("x-api-key", "")
             if not hmac.compare_digest(api_key, API_AUTH_KEY):
-                raise HTTPException(401, "Unauthorized — provide X-API-Key header")
+                raise AuthError("Unauthorized — provide X-API-Key header")
         return await call_next(request)
 
 
@@ -99,29 +123,42 @@ if not API_AUTH_KEY:
     )
 
 
-# ── Simple in-memory rate limiter ──
+# ── Idempotency cache (JSON, 1h TTL) ──
 
-class _RateLimiter:
-    """Sliding-window rate limiter per IP (process-local, not for distributed use)."""
-
-    def __init__(self, max_requests: int = 10, window_seconds: int = 60):
-        self.max_requests = max_requests
-        self.window = window_seconds
-        self._buckets: dict[str, list[float]] = defaultdict(list)
-
-    def check(self, ip: str) -> bool:
-        now = time.time()
-        cutoff = now - self.window
-        bucket = self._buckets[ip]
-        while bucket and bucket[0] < cutoff:
-            bucket.pop(0)
-        if len(bucket) >= self.max_requests:
-            return False
-        bucket.append(now)
-        return True
+_IDEMPOTENCY_DIR = Path(__file__).resolve().parent.parent / "output" / "idempotency"
+_IDEMPOTENCY_DIR.mkdir(parents=True, exist_ok=True)
+_IDEMPOTENCY_TTL = 3600
 
 
-_rate_limiter = _RateLimiter()
+def _idempotency_key_path(key: str) -> Path:
+    safe = hashlib.sha256(key.encode()).hexdigest()[:32]
+    return _IDEMPOTENCY_DIR / f"{safe}.json"
+
+
+def _get_idempotent_result(key: str) -> dict[str, Any] | None:
+    path = _idempotency_key_path(key)
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if time.time() - data.get("ts", 0) > _IDEMPOTENCY_TTL:
+            path.unlink(missing_ok=True)
+            return None
+        logger.info("Idempotency hit for key=%s", key[:16])
+        return data.get("result")
+    except Exception:
+        return None
+
+
+def _set_idempotent_result(key: str, result: dict[str, Any]) -> None:
+    path = _idempotency_key_path(key)
+    try:
+        path.write_text(
+            json.dumps({"ts": time.time(), "result": result}, default=str),
+            encoding="utf-8",
+        )
+    except Exception as e:
+        logger.debug("Idempotency cache write failed: %s", e)
 
 OUTPUT_DIR = Path(__file__).resolve().parent.parent / "output"
 OUTPUT_DIR.mkdir(exist_ok=True)
@@ -149,21 +186,18 @@ _METADATA_HOSTS = {
 
 
 def _validate_url_not_private(url: str):
-    """Raise HTTPException(422) if URL points to a private/internal host."""
+    """Raise ValidationError if URL points to a private/internal host."""
     parsed = urlparse(url)
     host = (parsed.hostname or "").lower()
     if not host:
-        raise HTTPException(422, "Invalid URL: no hostname")
-    # Exact-match blacklist
+        raise ValidationError("Invalid URL: no hostname")
     if host in ("localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]") or host in _METADATA_HOSTS:
-        raise HTTPException(422, "Invalid URL: private/internal hosts are not allowed")
-    # Prefix-match private ranges (IPv4 + IPv6 unique-local)
+        raise ValidationError("Invalid URL: private/internal hosts are not allowed")
     if any(host.startswith(p) for p in _PRIVATE_HOST_PREFIXES):
-        raise HTTPException(422, "Invalid URL: private/internal hosts are not allowed")
+        raise ValidationError("Invalid URL: private/internal hosts are not allowed")
 
 
 def _sanitize_filename_component(s: str) -> str:
-    """Strip path traversal chars and unwanted characters from a filename component."""
     s = s.replace("..", "").replace("/", "").replace("\\", "").replace(":", "")
     return s.strip(" .-_")
 
@@ -171,10 +205,10 @@ def _sanitize_filename_component(s: str) -> str:
 def _validate_generate_request(body: dict[str, Any]) -> dict[str, Any]:
     client = (body.get("client_name") or "").strip()
     if not client:
-        raise HTTPException(422, "client_name is required")
+        raise ValidationError("client_name is required")
     client = _sanitize_filename_component(client)
     if not client:
-        raise HTTPException(422, "client_name contains only invalid characters")
+        raise ValidationError("client_name contains only invalid characters")
     month = (body.get("report_month") or "").strip() or datetime.now().strftime("%B %Y")
     deliverable = (body.get("type") or "both").strip().lower()
     if deliverable not in ("both", "report", "plan"):
@@ -200,22 +234,12 @@ def _load_sheet_data() -> dict[str, list[dict[str, Any]]] | None:
         logger.warning("SheetClient init failed: %s", e)
         return None
 
-    tab_map = {
-        "Keywords": "keywords_raw",
-        "SERP Snapshot": "rankings_raw",
-        "SERP History": "history_raw",
-        "AI Analysis": "ai_raw",
-        "Site Audit": "audit_raw",
-        "Website Tracking & Insights": "insights_raw",
-        "Monthly SEO Plan": "plan_raw",
-        "Competitor Snapshot": "competitor_raw",
-    }
     result: dict[str, list[dict[str, Any]]] = {}
-    for tab_name, key in tab_map.items():
+    for tab_name, key in TAB_TO_KEY.items():
         try:
-            result[key] = sheet.read_records(tab_name)
+            result[key] = sheet.read_records(tab_name.value)
         except Exception as e:
-            logger.debug("Could not read tab '%s': %s", tab_name, e)
+            logger.debug("Could not read tab '%s': %s", tab_name.value, e)
             result[key] = []
     if not any(result.values()):
         logger.warning("All sheet tabs returned empty data")
@@ -234,19 +258,9 @@ def _load_cache_data() -> dict[str, list[dict[str, Any]]] | None:
         logger.warning("Data cache load failed: %s", e)
         return None
 
-    tab_map = {
-        "Keywords": "keywords_raw",
-        "SERP Snapshot": "rankings_raw",
-        "SERP History": "history_raw",
-        "AI Analysis": "ai_raw",
-        "Site Audit": "audit_raw",
-        "Website Tracking & Insights": "insights_raw",
-        "Monthly SEO Plan": "plan_raw",
-        "Competitor Snapshot": "competitor_raw",
-    }
     result: dict[str, list[dict[str, Any]]] = {}
-    for tab_name, key in tab_map.items():
-        result[key] = tabs.get(tab_name, [])
+    for tab_name, key in TAB_TO_KEY.items():
+        result[key] = tabs.get(tab_name.value, [])
     return result
 
 
@@ -306,38 +320,35 @@ _REQUIRED_BACKLINK_COLS: set[str] = {
 
 
 def _validate_backlink_csv(content: bytes) -> int:
-    """Validate backlink CSV content. Returns row count or raises HTTPException."""
+    """Validate backlink CSV content. Returns row count or raises ValidationError."""
     import csv
     import io
     try:
         decoded = content.decode("utf-8-sig")
     except UnicodeDecodeError:
-        raise HTTPException(400, "CSV must be UTF-8 encoded")
+        raise ValidationError("CSV must be UTF-8 encoded")
     try:
         reader = csv.DictReader(io.StringIO(decoded))
     except Exception as e:
-        raise HTTPException(400, f"Failed to parse CSV: {e}")
+        raise ValidationError(f"Failed to parse CSV: {e}")
     if not reader.fieldnames:
-        raise HTTPException(400, "CSV has no header row")
-    # Normalise headers for matching
+        raise ValidationError("CSV has no header row")
     norm_headers = {
         h.strip().lower().replace(" ", "_").replace("-", "_")
         for h in reader.fieldnames if h
     }
     if not norm_headers:
-        raise HTTPException(400, "CSV headers are empty after normalisation")
-    # Require at least total_backlinks or backlinks column
+        raise ValidationError("CSV headers are empty after normalisation")
     has_total = bool(norm_headers & {"total_backlinks", "backlinks_total", "backlinks", "total"})
     has_ref = bool(norm_headers & {"ref_domains", "referring_domains", "ref_domain", "referring_domain"})
     if not has_total or not has_ref:
-        raise HTTPException(
-            400,
+        raise ValidationError(
             "CSV must have columns for total_backlinks and ref_domains "
             "(or common variants). Found headers: " + ", ".join(sorted(norm_headers)),
         )
     rows = list(reader)
     if not rows:
-        raise HTTPException(400, "CSV has no data rows")
+        raise ValidationError("CSV has no data rows")
     return len(rows)
 
 
@@ -350,7 +361,7 @@ async def upload_backlinks_csv(project_domain: str, file: UploadFile = File(...)
     The data is picked up automatically by the audit pipeline.
     """
     if not file.filename or not file.filename.endswith(".csv"):
-        raise HTTPException(400, "Only .csv files are accepted")
+        raise ValidationError("Only .csv files are accepted")
 
     domain = project_domain.strip().lower()
     domain = re.sub(r"^https?://", "", domain)
@@ -382,7 +393,7 @@ async def upload_backlinks_csv(project_domain: str, file: UploadFile = File(...)
 @app.get("/api/health")
 async def health():
     """Health check. groq_configured == False just means narrative is limited."""
-    return {"status": "ok", "groq_configured": bool(GROQ_API_KEY)}
+    return {"status": "ok", "groq_configured": bool(GROQ_API_KEY), "request_id": current_request_id()}
 
 
 @app.get("/api/clients")
@@ -410,8 +421,7 @@ async def generate_report(body: dict[str, Any]):
 
     raw_data = _load_raw_data()
     if not raw_data:
-        raise HTTPException(
-            503,
+        raise DataUnavailable(
             "No data available. Run the data pipeline (python main.py) to collect real data, "
             "or ensure Google Sheets / data cache is configured.",
         )
@@ -480,9 +490,9 @@ async def download_report(filename: str):
     """Download a generated DOCX file (path-traversal safe)."""
     filepath = (OUTPUT_DIR / filename).resolve()
     if not str(filepath).startswith(str(OUTPUT_DIR.resolve())):
-        raise HTTPException(400, "Invalid path")
+        raise ValidationError("Invalid path")
     if not filepath.exists():
-        raise HTTPException(404, f"Report not found: {filename}")
+        raise NotFoundError(f"Report not found: {filename}")
     media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     return FileResponse(str(filepath), media_type=media_type, filename=filepath.name)
 
@@ -491,19 +501,28 @@ async def download_report(filename: str):
 async def run_audit(body: dict[str, Any], request: Request):
     """Run a manual SEO audit on any URL. Optionally read client data from a shared sheet.
 
+    Supports idempotency via ``Idempotency-Key`` header — repeat requests with
+    the same key return the cached result for up to 1 hour (avoids double crawl).
+
     Request: { url, sheet_url?, mode? ("single"|"full"), report_month? }
     Response: { success, url, month, generated[{type, filename, size_bytes}], errors[] }
     """
     url = (body.get("url") or "").strip()
     if not url:
-        raise HTTPException(422, "url is required")
+        raise ValidationError("url is required")
     if not url.startswith("http"):
         url = "https://" + url
     _validate_url_not_private(url)
 
     client_ip = request.client.host if request.client else "unknown"
-    if not _rate_limiter.check(client_ip):
-        raise HTTPException(429, "Rate limit exceeded — try again in 60 seconds")
+    if not rate_limiter.check(client_ip):
+        raise RateLimitError("Rate limit exceeded — try again in 60 seconds")
+
+    idempotency_key = request.headers.get("idempotency-key", "").strip()
+    if idempotency_key:
+        cached = _get_idempotent_result(idempotency_key)
+        if cached is not None:
+            return cached
 
     sheet_url = (body.get("sheet_url") or "").strip()
     mode = (body.get("mode") or "single").strip().lower()
@@ -519,13 +538,17 @@ async def run_audit(body: dict[str, Any], request: Request):
             timeout=180.0,
         )
     except asyncio.TimeoutError:
-        raise HTTPException(504, "Audit timed out after 180 seconds")
+        raise AuditTimeoutError("Audit timed out after 180 seconds")
     except Exception as e:
         logger.exception("Audit crashed for %s", url)
-        raise HTTPException(500, f"Audit error: {e}")
+        raise ProviderUnavailable(f"Audit error: {e}")
 
     if not result.get("success") and result.get("errors"):
-        raise HTTPException(502, "; ".join(result["errors"]))
+        raise ProviderUnavailable("; ".join(result["errors"]))
+
+    if idempotency_key:
+        _set_idempotent_result(idempotency_key, result)
+
     return result
 
 
@@ -541,8 +564,8 @@ async def demo_generate(payload: dict | None = None, request: Request = None):
     from api.audit_workflow import run_audit as _run_audit
 
     if request and request.client:
-        if not _rate_limiter.check(request.client.host):
-            raise HTTPException(429, "Rate limit exceeded — try again in 60 seconds")
+        if not rate_limiter.check(request.client.host):
+            raise RateLimitError("Rate limit exceeded — try again in 60 seconds")
 
     body = payload or {}
     url = body.get("url", "").strip() or "https://www.beautifulindia.com"
@@ -555,9 +578,8 @@ async def demo_generate(payload: dict | None = None, request: Request = None):
             timeout=120.0,
         )
     except asyncio.TimeoutError:
-        raise HTTPException(504, "Audit timed out — try a simpler URL")
+        raise AuditTimeoutError("Audit timed out — try a simpler URL")
 
-    # Return metrics without injecting synthetic defaults
     metrics = result.get("metrics", {})
 
     return {
@@ -575,15 +597,15 @@ async def demo_generate(payload: dict | None = None, request: Request = None):
 async def upload_report(file: UploadFile = File(...)):
     """Upload a CSV/JSON file with sheet data for monthly report generation."""
     if not file.filename:
-        raise HTTPException(400, "No file provided")
+        raise ValidationError("No file provided")
     ext = Path(file.filename).suffix.lower()
     if ext not in (".csv", ".json"):
-        raise HTTPException(400, "Only .csv and .json files are accepted")
+        raise ValidationError("Only .csv and .json files are accepted")
 
     MAX_UPLOAD = 10 * 1024 * 1024
     content = await file.read()
     if len(content) > MAX_UPLOAD:
-        raise HTTPException(413, f"File too large (max {MAX_UPLOAD // 1024 // 1024}MB)")
+        raise ValidationError(f"File too large (max {MAX_UPLOAD // 1024 // 1024}MB)")
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     dest = UPLOAD_DIR / f"upload_{ts}{ext}"
@@ -595,9 +617,9 @@ async def upload_report(file: UploadFile = File(...)):
 async def download_upload(filename: str):
     filepath = (UPLOAD_DIR / filename).resolve()
     if not str(filepath).startswith(str(UPLOAD_DIR.resolve())):
-        raise HTTPException(400, "Invalid path")
+        raise ValidationError("Invalid path")
     if not filepath.exists():
-        raise HTTPException(404)
+        raise NotFoundError()
     return FileResponse(str(filepath))
 
 
@@ -613,10 +635,10 @@ async def serve_root():
 @app.get("/{path:path}", include_in_schema=False)
 async def serve_frontend(path: str):
     if path.startswith("api/") or path.startswith("docs") or path.startswith("openapi"):
-        raise HTTPException(404)
+        raise NotFoundError()
     static_file = (FRONTEND_DIR / path).resolve()
     if not str(static_file).startswith(str(FRONTEND_DIR.resolve())):
-        raise HTTPException(404)
+        raise NotFoundError()
     if static_file.exists() and static_file.is_file():
         media_types = {
             ".css": "text/css", ".js": "text/javascript", ".html": "text/html",
@@ -628,7 +650,10 @@ async def serve_frontend(path: str):
     index = FRONTEND_DIR / "index.html"
     if index.exists():
         return HTMLResponse(index.read_text(encoding="utf-8"))
-    raise HTTPException(404)
+    raise NotFoundError()
+
+
+# Graceful shutdown is handled by the _lifespan context manager above.
 
 
 if __name__ == "__main__":

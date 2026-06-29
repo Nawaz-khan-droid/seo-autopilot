@@ -5,7 +5,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-import httpx
+from modules.http_pool import sync_client, async_client
 
 logger = logging.getLogger(__name__)
 
@@ -106,15 +106,16 @@ def fetch_pagespeed_metrics(url: str, strategy: str = "mobile") -> dict[str, Any
     # Quick single attempt — if it fails (rate-limited, etc.), return fast
     params = {"url": url, "strategy": strategy.upper(), "category": "PERFORMANCE"}
     try:
-        with httpx.Client(timeout=10) as client:
-            resp = client.get(PSI_API, params=params)
-            if resp.status_code == 429:
-                return {"strategy": strategy, "error": "rate_limited"}
-            resp.raise_for_status()
-            data = resp.json()
-    except httpx.HTTPStatusError as e:
-        return {"strategy": strategy, "error": f"http_{e.response.status_code}"}
+        client = sync_client()
+        resp = client.get(PSI_API, params=params, timeout=10)
+        if resp.status_code == 429:
+            return {"strategy": strategy, "error": "rate_limited"}
+        resp.raise_for_status()
+        data = resp.json()
     except Exception as e:
+        status_code = getattr(e, "response", None) and e.response.status_code
+        if status_code:
+            return {"strategy": strategy, "error": f"http_{status_code}"}
         return {"strategy": strategy, "error": str(e)}
 
     # First attempt succeeded — now parse it
@@ -147,12 +148,12 @@ async def fetch_pagespeed_metrics_async(url: str, strategy: str = "mobile") -> d
     """Async version for use with asyncio.gather()."""
     params = {"url": url, "strategy": strategy.upper(), "category": "PERFORMANCE"}
     try:
-        async with httpx.AsyncClient(timeout=PSI_TIMEOUT_S) as client:
-            resp = await client.get(PSI_API, params=params)
-            if resp.status_code == 429:
-                return {"strategy": strategy, "error": "rate_limited"}
-            resp.raise_for_status()
-            data = resp.json()
+        client = async_client()
+        resp = await client.get(PSI_API, params=params, timeout=PSI_TIMEOUT_S)
+        if resp.status_code == 429:
+            return {"strategy": strategy, "error": "rate_limited"}
+        resp.raise_for_status()
+        data = resp.json()
 
         parsed = _parse(data, strategy)
         return {

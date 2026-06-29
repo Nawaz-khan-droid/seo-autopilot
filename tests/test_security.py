@@ -12,10 +12,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from api.main import (
     _sanitize_filename_component,
     _validate_url_not_private,
-    _RateLimiter,
     _PRIVATE_HOST_PREFIXES,
     _METADATA_HOSTS,
 )
+from api.rate_limiter import RateLimiter
 from api.crawl_engine import _resolve_and_validate_target, _is_malware_request, _is_blocked_mime
 from fastapi import HTTPException
 
@@ -163,27 +163,27 @@ class TestMalwareBlocklist:
 
 class TestRateLimiter:
     def test_allows_within_limit(self):
-        limiter = _RateLimiter(max_requests=3, window_seconds=60)
+        limiter = RateLimiter(max_requests=3, window_seconds=60)
         assert limiter.check("1.2.3.4") is True
         assert limiter.check("1.2.3.4") is True
         assert limiter.check("1.2.3.4") is True
 
     def test_blocks_when_exceeded(self):
-        limiter = _RateLimiter(max_requests=3, window_seconds=60)
+        limiter = RateLimiter(max_requests=3, window_seconds=60)
         limiter.check("1.2.3.5")
         limiter.check("1.2.3.5")
         limiter.check("1.2.3.5")
         assert limiter.check("1.2.3.5") is False
 
     def test_different_ips_independent(self):
-        limiter = _RateLimiter(max_requests=1, window_seconds=60)
+        limiter = RateLimiter(max_requests=1, window_seconds=60)
         assert limiter.check("10.0.0.1") is True
         assert limiter.check("10.0.0.1") is False
         assert limiter.check("10.0.0.2") is True
 
     def test_window_expires(self):
         import time
-        limiter = _RateLimiter(max_requests=1, window_seconds=0.1)
+        limiter = RateLimiter(max_requests=1, window_seconds=0.1)
         assert limiter.check("1.2.3.6") is True
         assert limiter.check("1.2.3.6") is False
         time.sleep(0.15)

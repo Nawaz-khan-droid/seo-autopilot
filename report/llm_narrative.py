@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_MODEL = "llama-3.3-70b-versatile"
 FALLBACK_MODEL = "openai/gpt-oss-120b"
 FALLBACK_TIMEOUT_S = 60
+_MAX_INPUT_CHARS = 7000  # ~1750 tokens, well under 8k context
 
 # Phrases the LLM is known to hallucinate when no supporting data exists
 HALLUCINATION_PATTERNS: list[tuple[re.Pattern, str]] = [
@@ -109,6 +110,14 @@ def _call_groq(
     return None
 
 
+def _truncate_data_to_budget(data_json: str, max_chars: int = _MAX_INPUT_CHARS) -> str:
+    """Truncate data JSON if it exceeds the token budget."""
+    if len(data_json) <= max_chars:
+        return data_json
+    logger.warning("Narrative data %d chars exceeds budget %d — truncating", len(data_json), max_chars)
+    return data_json[:max_chars] + '\n  "_truncated": true\n}'
+
+
 def generate_executive_narrative(
     context_prompt: str,
     report_data: dict[str, Any],
@@ -131,6 +140,7 @@ def generate_executive_narrative(
 
     cleaned_data = _strip_empty_data(report_data)
     data_json = json.dumps(cleaned_data, indent=2, default=str) if cleaned_data else "NO DATA AVAILABLE"
+    data_json = _truncate_data_to_budget(data_json)
 
     system = (
         "You are a Senior Digital Marketing Agency Executive writing a monthly SEO report "
@@ -237,6 +247,7 @@ def generate_audit_summary(
 
     cleaned_data = _strip_empty_data(audit_data)
     data_json = json.dumps(cleaned_data, indent=2, default=str) if cleaned_data else "NO DATA AVAILABLE"
+    data_json = _truncate_data_to_budget(data_json)
 
     system = (
         "You are an elite Technical SEO Auditor. Analyze the crawl data strictly through the lens "

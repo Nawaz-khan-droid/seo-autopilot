@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urljoin, urlparse
 
-import httpx
 from filelock import FileLock
 
 from api.browser_manager import (
@@ -21,6 +20,7 @@ from api.browser_manager import (
     _get_browser_page,
 )
 from modules.firecrawl_client import FirecrawlClient, CrawledPage, CrawlResult
+from modules.http_pool import sync_client
 
 logger = logging.getLogger(__name__)
 
@@ -435,11 +435,11 @@ def _check_link_health(links: list[str], base_url: str) -> dict[str, Any]:
         if not _resolve_and_validate_target(link):
             return (link, "broken")
         try:
-            r = httpx.head(link, follow_redirects=False, timeout=5.0)
+            client = sync_client()
+            r = client.head(link, follow_redirects=False, timeout=5.0)
             if r.status_code == 405:
-                with httpx.Client() as c2:
-                    r2 = c2.get(link, timeout=5.0)
-                    return (link, "broken" if r2.status_code >= 400 else None)
+                r2 = client.get(link, timeout=5.0)
+                return (link, "broken" if r2.status_code >= 400 else None)
             if r.status_code >= 400:
                 return (link, "broken")
             if r.status_code in (301, 302, 303, 307, 308):

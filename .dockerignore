@@ -1,0 +1,13 @@
+.env
+credentials.json
+secrets/
+*.pem
+*.key
+__pycache__/
+*.pyc
+.pytest_cache/
+.git/
+.gitignore
+.gitattributes
+output/
+*.md

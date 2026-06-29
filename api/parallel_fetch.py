@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse, quote
 
-import httpx
 from filelock import FileLock
 
 from api.browser_manager import (
@@ -24,6 +23,7 @@ from api.browser_manager import (
 )
 from api.crawl_engine import _log_captcha_event
 from modules.firecrawl_client import CrawledPage, CrawlResult
+from modules.http_pool import sync_client
 from report.evidence import Evidence
 from report.facts import RankingRow
 
@@ -320,13 +320,6 @@ def _fetch_rankings_via_serp(
     domain = _domain_from_url(target_url)
     rows: list[RankingRow] = []
 
-    try:
-        from config.settings import SERPAPI_KEY
-    except Exception:
-        SERPAPI_KEY = os.environ.get("SERPAPI_KEY", "")
-    if not SERPAPI_KEY:
-        return rows
-
     if not keywords:
         keywords = _discover_keywords_from_page(target_url, existing_metrics=existing_metrics)
         if not keywords:
@@ -340,7 +333,7 @@ def _fetch_rankings_via_serp(
         if cached_row and cached_row.get("position") is not None:
             rows.append(RankingRow(
                 keyword=kw,
-                position=Evidence.verified(str(cached_row["position"]), "SerpApi (cached)"),
+                position=Evidence.verified(str(cached_row["position"]), "Rank cache"),
                 search_volume=0,
                 competition="medium",
             ))
@@ -351,39 +344,34 @@ def _fetch_rankings_via_serp(
         logger.info("Rank cache hit for all %d keywords for %s", len(rows), domain)
         return rows
 
-    try:
-        from modules.serp_client import SerpClient
-        client = SerpClient(api_key=SERPAPI_KEY, max_depth=30)
+    from api.rank_providers import try_providers
 
-        def _check_one(kw: str) -> RankingRow | None:
-            try:
-                data = client.search(keyword=kw, location="India", device="desktop", depth=30)
-                for res in data.get("organic_results", []):
-                    link = (res.get("link") or "").lower()
-                    if domain in link:
-                        pos = res.get("position")
-                        if pos is not None:
-                            _save_rank_cache(domain, kw, {"position": str(pos), "ts": time.time()})
-                            return RankingRow(
-                                keyword=kw,
-                                position=Evidence.verified(str(pos), "SerpApi"),
-                                search_volume=0,
-                                competition="medium",
-                            )
-                _save_rank_cache(domain, kw, {"position": None, "ts": time.time()})
-                return None
-            except Exception as e:
-                logger.debug("SERP lookup failed for '%s': %s", kw, e)
-                return None
+    def _check_one(kw: str) -> RankingRow | None:
+        try:
+            pos, ranking_url, provider = try_providers(
+                keyword=kw, target_url=target_url,
+                location="India", device="desktop",
+            )
+            if pos is not None:
+                _save_rank_cache(domain, kw, {"position": str(pos), "ts": time.time()})
+                return RankingRow(
+                    keyword=kw,
+                    position=Evidence.verified(str(pos), provider or "SERP"),
+                    search_volume=0,
+                    competition="medium",
+                )
+            _save_rank_cache(domain, kw, {"position": None, "ts": time.time()})
+            return None
+        except Exception as e:
+            logger.debug("SERP lookup failed for '%s': %s", kw, e)
+            return None
 
-        with ThreadPoolExecutor(max_workers=5) as pool:
-            futures = [pool.submit(_check_one, kw) for kw in uncached]
-            for f in futures:
-                result = f.result()
-                if result is not None:
-                    rows.append(result)
-    except Exception as e:
-        logger.warning("SERP rank check failed: %s", e)
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        futures = [pool.submit(_check_one, kw) for kw in uncached]
+        for f in futures:
+            result = f.result()
+            if result is not None:
+                rows.append(result)
 
     logger.info("SERP rank check: %d/%d keywords for %s", len(rows), len(keywords[:15]), domain)
     return rows
@@ -398,8 +386,8 @@ def _fetch_google_trends(keyword: str, timeframe: str = "today 12-m") -> dict | 
         SERPAPI_KEY = os.environ.get("SERPAPI_KEY", "")
     if not SERPAPI_KEY:
         return None
+
     try:
-        import requests
         params = {
             "engine": "google_trends",
             "q": keyword,
@@ -409,7 +397,7 @@ def _fetch_google_trends(keyword: str, timeframe: str = "today 12-m") -> dict | 
             "hl": "en",
             "tz": "420",
         }
-        resp = requests.get("https://serpapi.com/search", params=params, timeout=30)
+        resp = sync_client().get("https://serpapi.com/search", params=params, timeout=30)
         resp.raise_for_status()
         data = resp.json()
         if "error" in data:

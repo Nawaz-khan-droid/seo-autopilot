@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-import httpx
+from modules.http_pool import sync_client
 
 from modules.firecrawl_client import CrawledPage, CrawlResult
 from modules.sheet_client import SheetClient as _SheetClient
@@ -130,7 +130,7 @@ def _build_facts_from_audit(
         domain = urlparse(url).netloc
         robots_url = f"https://{domain}/robots.txt"
         if _resolve_and_validate_target(robots_url):
-            r = httpx.head(robots_url, timeout=5.0)
+            r = sync_client().head(robots_url, timeout=5.0)
             facts.site_info.has_robots_txt = Evidence.verified("Found" if r.status_code < 400 else "Not Found", "HTTP HEAD")
         else:
             facts.site_info.has_robots_txt = Evidence.missing()
@@ -139,7 +139,7 @@ def _build_facts_from_audit(
     try:
         sitemap_url = f"https://{domain}/sitemap.xml"
         if _resolve_and_validate_target(sitemap_url):
-            r = httpx.head(sitemap_url, timeout=5.0)
+            r = sync_client().head(sitemap_url, timeout=5.0)
             facts.site_info.has_sitemap_xml = Evidence.verified("Found" if r.status_code < 400 else "Not Found", "HTTP HEAD")
         else:
             facts.site_info.has_sitemap_xml = Evidence.missing()

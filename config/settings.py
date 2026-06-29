@@ -70,6 +70,7 @@ BROWSER_PROXY_URL = get_optional("BROWSER_PROXY_URL", "")
 _MAX_KEYWORDS_RAW = int(get_optional("MAX_KEYWORDS", "999"))
 MAX_KEYWORDS = max(1, min(_MAX_KEYWORDS_RAW, 9999))
 
+# Tab names — DEPRECATED: use config.sheet_schema.TabName instead
 TABS = {
     "keywords": "Keywords",
     "serp_snapshot": "SERP Snapshot",

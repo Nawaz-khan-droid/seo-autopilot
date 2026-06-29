@@ -4,7 +4,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-import requests
+from httpx import HTTPStatusError, RequestError
+
+from modules.http_pool import sync_client
 from tenacity import (
     retry,
     stop_after_attempt,
@@ -47,7 +49,8 @@ class SerpClient:
             "gl": "in",
             "hl": "en",
         }
-        response = requests.get(SERPAPI_BASE_URL, params=params, timeout=30)
+        client = sync_client()
+        response = client.get(SERPAPI_BASE_URL, params=params, timeout=30)
         response.raise_for_status()
         data = response.json()
         if "error" in data:
@@ -58,7 +61,7 @@ class SerpClient:
         stop=stop_after_attempt(2),
         wait=wait_exponential(multiplier=1, min=2, max=10),
         retry=retry_if_exception_type(
-            (requests.ConnectionError, requests.Timeout)
+            (RequestError, HTTPStatusError)
         ),
         reraise=True,
     )
