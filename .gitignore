@@ -1,6 +1,6 @@
 .env
 credentials.json
-secrets/credentials.json
+secrets/
 logs/
 __pycache__/
 *.pyc
