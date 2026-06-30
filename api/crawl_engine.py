@@ -187,6 +187,7 @@ def _run_playwright_headless(target_url: str) -> dict[str, Any]:
 
         page.on("response", _on_response)
         page.goto(target_url, wait_until="networkidle", timeout=30000)
+        page.evaluate("window.scrollTo(0, document.body.scrollHeight); window.scrollTo(0, 0);")
 
         all_links = page.evaluate("""
             () => Array.from(document.querySelectorAll('a[href]'))

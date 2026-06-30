@@ -308,7 +308,7 @@ def _search_google_via_playwright(keyword: str, target_url: str) -> list[dict[st
         import random as _rand
         from urllib.parse import quote
         search_url = f"https://www.google.com/search?q={quote(keyword)}&hl=en&num=10"
-        page.goto(search_url, wait_until="domcontentloaded", timeout=15000)
+        page.goto(search_url, wait_until="domcontentloaded", timeout=10000)
         page.wait_for_timeout(_rand.uniform(800, 1500))
 
         # CAPTCHA check
@@ -425,7 +425,7 @@ def _fetch_rankings_via_serp(
         # Fallback: scrape Google via Playwright (slower, no API key needed)
         logger.info("No SERP API keys — using Playwright fallback for %d keywords", len(uncached))
         from modules.url_utils import exact_url_match
-        for kw in uncached[:5]:  # limit to 5 to avoid CAPTCHA
+        for kw in uncached[:2]:  # max 2 keywords to stay under 30s
             try:
                 serp_results = _search_google_via_playwright(kw, target_url)
                 pos = None
@@ -441,7 +441,6 @@ def _fetch_rankings_via_serp(
                         search_volume=0,
                         competition="medium",
                     ))
-                time.sleep(random.uniform(2.0, 4.0))  # anti-CAPTCHA delay
             except Exception as e:
                 logger.debug("Playwright SERP fallback failed for '%s': %s", kw, e)
 

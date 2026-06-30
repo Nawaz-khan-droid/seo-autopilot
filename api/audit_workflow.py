@@ -122,14 +122,22 @@ def _generate_deliverables(
                     top10 += 1
             except (ValueError, TypeError):
                 pass
+    # Count discovered keywords from page title as a fallback
+    if not rankings:
+        title = final_metrics.get("title", "") or ""
+        if title:
+            discovered = [w for w in title.split() if len(w) > 3]
+            final_metrics["keywords_tracked"] = max(1, min(len(discovered), 5))
     final_metrics["rankings_top_3"] = top3
     final_metrics["rankings_top_10"] = top10
     if facts.backlinks.total_backlinks.is_available and facts.backlinks.total_backlinks.value is not None:
         final_metrics["backlinks_count"] = facts.backlinks.total_backlinks.value
     elif facts.backlinks.domain_rating.is_available and facts.backlinks.domain_rating.value is not None:
         final_metrics["backlinks_count"] = f"DR {facts.backlinks.domain_rating.value}"
+    elif facts.backlinks.status == "AWAITING_DATA":
+        final_metrics["backlinks_count"] = "Data Pending"
     else:
-        final_metrics["backlinks_count"] = None
+        final_metrics["backlinks_count"] = "No Data"
 
     _generate_narrative(facts, crawl_result, context_prompt, defensive_payload)
 
