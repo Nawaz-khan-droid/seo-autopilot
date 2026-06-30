@@ -590,22 +590,35 @@ async def run_audit(body: dict[str, Any], request: Request):
 # ── Demo endpoint — run audit on any URL (background job + polling) ──
 
 def _run_demo_background(job_id: str, url: str) -> None:
-    """Run the audit in a background thread so Codespaces proxy doesn't drop."""
-    from api.audit_workflow import run_audit as _run_audit
+    """Run the audit in a background thread so Codespaces proxy doesn't drop.
+    Always returns at least quick-scan metrics (guaranteed, <5s).
+    """
+    from api.audit_workflow import _quick_page_scan, run_audit as _run_audit
+    # Step 1: Quick scan (guaranteed, <5s) → store as initial result
+    quick = _quick_page_scan(url)
+    _job_set(job_id, status="done", progress="Scan complete — enriching...", result={
+        "success": True,
+        "client": url,
+        "month": datetime.now().strftime("%B %Y"),
+        "metrics": quick,
+        "niche": "—",
+    })
+    # Step 2: Full audit (may take 60-120s, may fail)
     try:
-        _job_set(job_id, status="running", progress="Crawling site...")
         result = _run_audit(url)
         metrics = result.get("metrics", {})
+        # Merge full audit metrics into quick scan (full audit wins)
+        quick.update(metrics)
         _job_set(job_id, status="done", result={
-            "success": result.get("success", False),
+            "success": result.get("success", True),
             "client": result.get("client", url),
-            "month": result.get("month", "June 2026"),
-            "metrics": metrics,
+            "month": result.get("month", datetime.now().strftime("%B %Y")),
+            "metrics": quick,
             "niche": result.get("niche", "—"),
         })
     except Exception as e:
-        logger.exception("Demo audit failed for %s", url)
-        _job_set(job_id, status="error", error=str(e))
+        logger.exception("Full audit failed for %s — returning quick scan", url)
+        # Quick scan already stored — keep it
 
 
 @app.post("/api/demo/generate")
