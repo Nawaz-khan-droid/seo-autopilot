@@ -175,7 +175,6 @@ def _run_playwright_headless(target_url: str) -> dict[str, Any]:
 
         broken_responses: list[dict[str, Any]] = []
         redirect_chains: list[dict[str, Any]] = []
-        all_links_on_page: set[str] = set()
 
         def _on_response(resp):
             status = resp.status
@@ -186,25 +185,80 @@ def _run_playwright_headless(target_url: str) -> dict[str, Any]:
                 redirect_chains.append({"url": req_url, "status": status})
 
         page.on("response", _on_response)
-        page.goto(target_url, wait_until="networkidle", timeout=30000)
+        page.goto(target_url, wait_until="domcontentloaded", timeout=15000)
         page.evaluate("window.scrollTo(0, document.body.scrollHeight); window.scrollTo(0, 0);")
 
-        all_links = page.evaluate("""
-            () => Array.from(document.querySelectorAll('a[href]'))
-                .map(a => a.href)
-                .filter(h => h.startsWith('http'))
-        """) or []
-        all_links_on_page = set(all_links)
+        # Comprehensive SEO extraction in a single JS pass
+        seo = page.evaluate("""() => {
+            const results = {
+                title: document.title || '',
+                meta_description: '',
+                h1_texts: [],
+                h1_count: 0,
+                total_images_found: 0,
+                alt_missing: 0,
+                alt_total: 0,
+                has_og_tags: false,
+                has_yoast_schema: false,
+                word_count: 0,
+                links: [],
+            };
+            // Meta description
+            const meta = document.querySelector('meta[name="description"]');
+            if (meta) results.meta_description = meta.content || '';
+            // H1s
+            const h1s = document.querySelectorAll('h1');
+            results.h1_count = h1s.length;
+            h1s.forEach(h => { if (h.textContent.trim()) results.h1_texts.push(h.textContent.trim()); });
+            // Images
+            document.querySelectorAll('img').forEach(img => {
+                results.total_images_found++;
+                const alt = (img.alt || '').trim();
+                const title = (img.title || '').trim();
+                if (!alt) results.alt_missing++;
+                if (!title) results.alt_missing++;
+                results.alt_total++;
+            });
+            // OG tags
+            document.querySelectorAll('meta[property]').forEach(m => {
+                if (m.getAttribute('property').startsWith('og:')) results.has_og_tags = true;
+            });
+            // Schema
+            document.querySelectorAll('script[type="application/ld+json"]').forEach(s => {
+                if (s.textContent && s.textContent.includes('@type')) results.has_yoast_schema = true;
+            });
+            // Word count
+            const body = document.body;
+            if (body) results.word_count = (body.textContent || '').trim().split(/\\s+/).filter(Boolean).length;
+            // Links
+            document.querySelectorAll('a[href]').forEach(a => {
+                const href = a.href;
+                if (href && href.startsWith('http')) results.links.push(href);
+            });
+            return results;
+        }""") or {}
 
-        raw = _parse_rendered_html(page.content(), target_url)
-        raw["link_health"] = {
-            "broken_in_page_load": broken_responses,
-            "redirects_in_page_load": redirect_chains,
-            "all_hrefs": list(all_links_on_page),
+        raw = {
+            "title": seo.get("title", ""),
+            "meta_description": seo.get("meta_description", ""),
+            "h1_count": seo.get("h1_count", 0),
+            "h1_texts": seo.get("h1_texts", []),
+            "total_images_found": seo.get("total_images_found", 0),
+            "alt_missing": seo.get("alt_missing", 0),
+            "alt_total": seo.get("alt_total", 0),
+            "has_og_tags": seo.get("has_og_tags", False),
+            "has_yoast_schema": seo.get("has_yoast_schema", False),
+            "word_count": seo.get("word_count", 0),
+            "link_health": {
+                "broken_in_page_load": broken_responses,
+                "redirects_in_page_load": redirect_chains,
+                "all_hrefs": seo.get("links", []),
+            },
+            "_pages": [],
         }
         logger.info("Playwright OK: %d images, %d links (%d broken in load), %d h1",
-                     raw.get("total_images_found", 0), len(all_links_on_page),
-                     len(broken_responses), raw.get("h1_count", 0))
+                     raw["total_images_found"], len(seo.get("links", [])),
+                     len(broken_responses), raw["h1_count"])
     except Exception as e:
         logger.warning("Playwright headless failed: %s", e)
     finally:

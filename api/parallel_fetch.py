@@ -391,8 +391,10 @@ def _fetch_rankings_via_serp(
         logger.info("Rank cache hit for all %d keywords for %s", len(rows), domain)
         return rows
 
+    before = len(rows)
+
+    # Try API providers if keys are configured
     if any_provider_available():
-        # Use API providers (fast, reliable)
         from api.rank_providers import try_providers
 
         def _check_one(kw: str) -> RankingRow | None:
@@ -421,11 +423,12 @@ def _fetch_rankings_via_serp(
                 result = f.result()
                 if result is not None:
                     rows.append(result)
-    else:
-        # Fallback: scrape Google via Playwright (slower, no API key needed)
-        logger.info("No SERP API keys — using Playwright fallback for %d keywords", len(uncached))
+
+    # Playwright fallback when no results from API providers (or no keys at all)
+    if len(rows) == before and uncached:
+        logger.info("Playwright SERP fallback for up to 2 keywords")
         from modules.url_utils import exact_url_match
-        for kw in uncached[:2]:  # max 2 keywords to stay under 30s
+        for kw in uncached[:2]:
             try:
                 serp_results = _search_google_via_playwright(kw, target_url)
                 pos = None
