@@ -107,6 +107,26 @@ def _generate_deliverables(
     defensive_payload: dict[str, Any],
 ) -> dict[str, Any]:
     """Shared deliverable generation for both Firecrawl and local paths."""
+    # Enrich metrics with ranking/backlink data from facts
+    rankings = facts.rankings or []
+    final_metrics["keywords_tracked"] = len(rankings)
+    top3 = 0
+    top10 = 0
+    for r in rankings:
+        if r.position.is_available and r.position.value is not None:
+            try:
+                pos = int(str(r.position.value))
+                if pos <= 3:
+                    top3 += 1
+                if pos <= 10:
+                    top10 += 1
+            except (ValueError, TypeError):
+                pass
+    final_metrics["rankings_top_3"] = top3
+    final_metrics["rankings_top_10"] = top10
+    if facts.backlinks.total_backlinks.is_available and facts.backlinks.total_backlinks.value is not None:
+        final_metrics["backlinks_count"] = facts.backlinks.total_backlinks.value
+
     _generate_narrative(facts, crawl_result, context_prompt, defensive_payload)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
