@@ -254,7 +254,12 @@ def _run_audit_impl(
         parallel_future = pool.submit(_fetch_parallel, url)
         link_health_future = pool.submit(_check_link_health, all_hrefs, url) if all_hrefs else None
 
-    parallel = parallel_future.result()
+    try:
+        parallel = parallel_future.result()
+    except Exception as e:
+        logger.error("Parallel fetch failed: %s", e)
+        parallel = {"psi_mobile": {}, "psi_desktop": {}, "backlinks": {}, "gsc": None, "ga4": None}
+
     psi_mobile = parallel["psi_mobile"]
     psi_desktop = parallel["psi_desktop"]
     backlinks_data = parallel["backlinks"]
@@ -263,7 +268,11 @@ def _run_audit_impl(
 
     final_metrics = dict(defensive_payload)
 
-    link_health_data = link_health_future.result() if link_health_future is not None else None
+    try:
+        link_health_data = link_health_future.result() if link_health_future is not None else None
+    except Exception as e:
+        logger.warning("Link health check failed: %s", e)
+        link_health_data = None
 
     # ── Branch: crawl source (only unique part per path) ──
     if not fc.available:

@@ -420,12 +420,12 @@ def _check_link_health(links: list[str], base_url: str) -> dict[str, Any]:
                     redirects.append(link)
 
     return {
-        "total_links_checked": len(internal_links) + len(external_links),
+        "total_links_checked": len(internal_links),
         "internal_links": len(internal_links),
-        "external_links": len(external_links),
+        "external_links": 0,
         "broken_links": broken,
         "redirect_links": redirects,
-        "healthy_count": len(internal_links) - len(broken) - len(redirects),
+        "healthy_count": len(internal_links) - len(broken),
     }
 
 

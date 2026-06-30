@@ -174,20 +174,28 @@ def _fetch_openpagerank(domain: str) -> dict[str, Any] | None:
 def _find_mentions_via_ddg(domain: str) -> dict[str, Any] | None:
     """Find backlink mentions using DuckDuckGo search. Free, no API key."""
     try:
-        from duckduckgo_search import DDGS
+        from ddgs import DDGS
+        from urllib.parse import urlparse
         refs: list[str] = []
         with DDGS() as ddgs:
             results = list(ddgs.text(f'"{domain}" -site:{domain}', max_results=20))
         for r in results:
             href = r.get("href", "")
-            if href and domain not in href:
-                refs.append(href)
+            if not href:
+                continue
+            try:
+                ref_domain = urlparse(href).netloc.lower().replace("www.", "")
+                if ref_domain and domain not in ref_domain:
+                    refs.append(href)
+            except Exception:
+                pass
         if refs:
             unique_domains: set[str] = set()
             for u in refs:
                 try:
-                    from urllib.parse import urlparse
-                    unique_domains.add(urlparse(u).netloc.lower())
+                    netloc = urlparse(u).netloc.lower().replace("www.", "")
+                    if netloc:
+                        unique_domains.add(netloc)
                 except Exception:
                     pass
             return {

@@ -296,7 +296,6 @@ def _search_google_via_playwright(keyword: str, target_url: str) -> list[dict[st
     if not resolve_and_validate_target(target_url):
         return []
 
-    from modules.url_utils import exact_url_match
     results: list[dict[str, Any]] = []
     page = None
     try:
@@ -442,7 +441,7 @@ def _fetch_rankings_via_serp(
                         search_volume=0,
                         competition="medium",
                     ))
-                time.sleep(_rand.uniform(2.0, 4.0))  # anti-CAPTCHA delay
+                time.sleep(random.uniform(2.0, 4.0))  # anti-CAPTCHA delay
             except Exception as e:
                 logger.debug("Playwright SERP fallback failed for '%s': %s", kw, e)
 

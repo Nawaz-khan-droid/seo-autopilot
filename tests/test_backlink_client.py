@@ -86,12 +86,13 @@ def test_csv_various_headers(csv_text, expected, temp_storage, temp_memories):
 
 def test_no_data_returns_awaiting(temp_storage, temp_memories):
     from modules.backlink_client import fetch_backlinks
-
-    result = fetch_backlinks("https://unknown-domain-xyz.com")
-    assert result["status"] == "AWAITING_DATA"
-    assert result["total_backlinks"] == "Data Pending"
-    assert result["ref_domains"] == "Data Pending"
-    assert result["source"] == "Manual Entry Needed"
+    with patch("modules.backlink_client._find_mentions_via_ddg", return_value=None), \
+         patch("modules.backlink_client._fetch_openpagerank", return_value=None):
+        result = fetch_backlinks("https://unknown-domain-xyz.com")
+        assert result["status"] == "AWAITING_DATA"
+        assert result["total_backlinks"] == "Data Pending"
+        assert result["ref_domains"] == "Data Pending"
+        assert result["source"] == "Manual Entry Needed"
 
 
 # ---------------------------------------------------------------------------
@@ -112,8 +113,10 @@ def test_stale_cache_is_skipped(temp_storage, temp_memories):
     cache_path = temp_memories / "backlinks_cached.com.json"
     cache_path.write_text(json.dumps(stale), encoding="utf-8")
 
-    result = fetch_backlinks("https://cached.com")
-    assert result["status"] == "AWAITING_DATA"
+    with patch("modules.backlink_client._find_mentions_via_ddg", return_value=None), \
+         patch("modules.backlink_client._fetch_openpagerank", return_value=None):
+        result = fetch_backlinks("https://cached.com")
+        assert result["status"] == "AWAITING_DATA"
 
 
 def test_fresh_cache_is_used(temp_storage, temp_memories):
@@ -168,8 +171,10 @@ def test_csv_overrides_cache(temp_storage, temp_memories):
 def test_browseros_fallback_when_not_connected(temp_storage, temp_memories):
     """When BrowserOS is not running, should fall through to AWAITING_DATA."""
     from modules.backlink_client import fetch_backlinks
-    result = fetch_backlinks("https://no-browseros.com")
-    assert result["status"] == "AWAITING_DATA"
+    with patch("modules.backlink_client._find_mentions_via_ddg", return_value=None), \
+         patch("modules.backlink_client._fetch_openpagerank", return_value=None):
+        result = fetch_backlinks("https://no-browseros.com")
+        assert result["status"] == "AWAITING_DATA"
 
 
 @patch("modules.backlink_client._try_browseros_scrape")
