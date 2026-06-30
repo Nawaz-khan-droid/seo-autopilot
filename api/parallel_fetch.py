@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import ipaddress
 import json
 import logging
 import os
 import random
 import re
-import socket
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -24,6 +22,7 @@ from api.browser_manager import (
 from api.crawl_engine import _log_captcha_event
 from modules.firecrawl_client import CrawledPage, CrawlResult
 from modules.http_pool import sync_client
+from modules.url_utils import resolve_and_validate_target
 from report.evidence import Evidence
 from report.facts import RankingRow
 
@@ -36,42 +35,6 @@ RANK_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 def _domain_from_url(url: str) -> str:
     return urlparse(url).netloc.lower().replace("www.", "").split(":")[0]
-
-
-_PRIVATE_SUBNETS = [
-    ipaddress.ip_network("10.0.0.0/8"),
-    ipaddress.ip_network("172.16.0.0/12"),
-    ipaddress.ip_network("192.168.0.0/16"),
-    ipaddress.ip_network("169.254.0.0/16"),
-    ipaddress.ip_network("127.0.0.0/8"),
-    ipaddress.ip_network("::1/128"),
-    ipaddress.ip_network("fd00::/8"),
-    ipaddress.ip_network("fc00::/7"),
-]
-
-
-def _resolve_and_validate_target(url: str) -> bool:
-    """Resolve hostname to IPs and reject private/internal addresses.
-
-    Returns True if the target is safe to request, False for private IPs.
-    """
-    try:
-        hostname = urlparse(url).hostname
-        if not hostname:
-            return False
-        addrs = socket.getaddrinfo(hostname, 80, family=socket.AF_UNSPEC, type=socket.SOCK_STREAM)
-        for family, _, _, _, sockaddr in addrs:
-            ip_str = sockaddr[0]
-            try:
-                addr = ipaddress.ip_address(ip_str)
-                for net in _PRIVATE_SUBNETS:
-                    if addr in net:
-                        return False
-            except ValueError:
-                continue
-        return True
-    except (socket.gaierror, OSError, ValueError):
-        return False
 
 
 # ── Rank cache (JSON, keyed by domain+keyword, 1h TTL) ──
@@ -112,7 +75,7 @@ def _save_rank_cache(domain: str, keyword: str, entry: dict[str, Any]) -> None:
 # ── CWV via Playwright Performance API (PSI fallback) ──
 
 def _capture_cwv_via_playwright(target_url: str, strategy: str = "mobile") -> dict[str, Any]:
-    if not _resolve_and_validate_target(target_url):
+    if not resolve_and_validate_target(target_url):
         return {"strategy": strategy, "error": "private_target"}
     if not PLAYWRIGHT_AVAILABLE:
         return {"strategy": strategy, "error": "playwright_unavailable"}
@@ -263,7 +226,7 @@ def _fetch_parallel(url: str) -> dict[str, Any]:
 
 def _discover_keywords_from_page(target_url: str, existing_metrics: dict | None = None) -> list[str]:
     kws: list[str] = []
-    if not _resolve_and_validate_target(target_url):
+    if not resolve_and_validate_target(target_url):
         logger.warning("Keyword discovery blocked private target: %s", target_url)
         return kws
     if not kws:
@@ -468,7 +431,7 @@ def _fetch_ga4_data() -> dict | None:
 # ── SERP screenshot ──
 
 def _capture_serp_preview(target_url: str) -> bytes | None:
-    if not _resolve_and_validate_target(target_url):
+    if not resolve_and_validate_target(target_url):
         logger.warning("SERP preview blocked private target: %s", target_url)
         return None
     if not PLAYWRIGHT_AVAILABLE:

@@ -5,10 +5,8 @@ logs/
 __pycache__/
 *.pyc
 .pytest_cache/
-output/uploads/*
-!output/uploads/.gitkeep
-output/rank_cache/*
-!output/rank_cache/.gitkeep
+output/
+!output/.gitkeep
 *.pem
 *.key
 cert.pem

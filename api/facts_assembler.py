@@ -8,6 +8,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from modules.http_pool import sync_client
+from modules.url_utils import resolve_and_validate_target
 
 from modules.firecrawl_client import CrawledPage, CrawlResult
 from modules.sheet_client import SheetClient as _SheetClient
@@ -16,7 +17,6 @@ from report.facts import (
     ActionItem, CWVData, Kpidata, RankingRow, ReportFacts,
     TechnicalData, TechnicalIssue, ReportMetadata,
 )
-from api.crawl_engine import _resolve_and_validate_target
 from api.parallel_fetch import _fetch_rankings_via_serp
 
 logger = logging.getLogger(__name__)
@@ -129,7 +129,7 @@ def _build_facts_from_audit(
     try:
         domain = urlparse(url).netloc
         robots_url = f"https://{domain}/robots.txt"
-        if _resolve_and_validate_target(robots_url):
+        if resolve_and_validate_target(robots_url):
             r = sync_client().head(robots_url, timeout=5.0)
             facts.site_info.has_robots_txt = Evidence.verified("Found" if r.status_code < 400 else "Not Found", "HTTP HEAD")
         else:
@@ -138,7 +138,7 @@ def _build_facts_from_audit(
         facts.site_info.has_robots_txt = Evidence.missing()
     try:
         sitemap_url = f"https://{domain}/sitemap.xml"
-        if _resolve_and_validate_target(sitemap_url):
+        if resolve_and_validate_target(sitemap_url):
             r = sync_client().head(sitemap_url, timeout=5.0)
             facts.site_info.has_sitemap_xml = Evidence.verified("Found" if r.status_code < 400 else "Not Found", "HTTP HEAD")
         else:

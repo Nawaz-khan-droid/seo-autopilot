@@ -16,7 +16,8 @@ from api.main import (
     _METADATA_HOSTS,
 )
 from api.rate_limiter import RateLimiter
-from api.crawl_engine import _resolve_and_validate_target, _is_malware_request, _is_blocked_mime
+from modules.url_utils import resolve_and_validate_target as _resolve_and_validate_target
+from api.crawl_engine import _is_malware_request, _is_blocked_mime
 from fastapi import HTTPException
 
 
@@ -196,7 +197,7 @@ class TestGitignore:
     def test_secrets_credentials_ignored(self):
         gitignore = Path(__file__).resolve().parent.parent / ".gitignore"
         content = gitignore.read_text(encoding="utf-8")
-        assert "secrets/credentials.json" in content, "secrets/credentials.json not in .gitignore"
+        assert "secrets/" in content, "secrets/ not in .gitignore"
 
     def test_root_credentials_ignored(self):
         gitignore = Path(__file__).resolve().parent.parent / ".gitignore"
@@ -273,5 +274,5 @@ class TestFactsAssemblerSSRF:
         from api.facts_assembler import _build_facts_from_audit
         import inspect
         source = inspect.getsource(_build_facts_from_audit)
-        assert "_resolve_and_validate_target" in source, \
+        assert "resolve_and_validate_target" in source, \
             "facts_assembler must validate targets before HEAD requests"

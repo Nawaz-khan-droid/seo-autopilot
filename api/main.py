@@ -30,6 +30,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from contextlib import asynccontextmanager
+from filelock import FileLock
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -165,26 +166,32 @@ def _idempotency_key_path(key: str) -> Path:
 
 def _get_idempotent_result(key: str) -> dict[str, Any] | None:
     path = _idempotency_key_path(key)
-    if not path.exists():
-        return None
+    lock_path = path.with_suffix(".lock")
+    lock = FileLock(str(lock_path), timeout=1.0)
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        if time.time() - data.get("ts", 0) > _IDEMPOTENCY_TTL:
-            path.unlink(missing_ok=True)
-            return None
-        logger.info("Idempotency hit for key=%s", key[:16])
-        return data.get("result")
+        with lock:
+            if not path.exists():
+                return None
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if time.time() - data.get("ts", 0) > _IDEMPOTENCY_TTL:
+                path.unlink(missing_ok=True)
+                return None
+            logger.info("Idempotency hit for key=%s", key[:16])
+            return data.get("result")
     except Exception:
         return None
 
 
 def _set_idempotent_result(key: str, result: dict[str, Any]) -> None:
     path = _idempotency_key_path(key)
+    lock_path = path.with_suffix(".lock")
+    lock = FileLock(str(lock_path), timeout=1.0)
     try:
-        path.write_text(
-            json.dumps({"ts": time.time(), "result": result}, default=str),
-            encoding="utf-8",
-        )
+        with lock:
+            path.write_text(
+                json.dumps({"ts": time.time(), "result": result}, default=str),
+                encoding="utf-8",
+            )
     except Exception as e:
         logger.debug("Idempotency cache write failed: %s", e)
 

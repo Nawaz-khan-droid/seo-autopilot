@@ -5,7 +5,7 @@ services:
     dockerfilePath: ./Dockerfile
     repo: https://github.com/Nawaz-khan-droid/seo-autopilot
     branch: main
-    healthCheckPath: /health
+    healthCheckPath: /api/health
     envVars:
       - key: GROQ_API_KEY
         sync: false

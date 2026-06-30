@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import ipaddress
 import json
 import logging
 import os
 import random
-import socket
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -21,6 +19,7 @@ from api.browser_manager import (
 )
 from modules.firecrawl_client import FirecrawlClient, CrawledPage, CrawlResult
 from modules.http_pool import sync_client
+from modules.url_utils import resolve_and_validate_target
 
 logger = logging.getLogger(__name__)
 
@@ -87,41 +86,7 @@ def _is_blocked_mime(url: str) -> bool:
     return False
 
 
-_PRIVATE_SUBNETS = [
-    ipaddress.ip_network("10.0.0.0/8"),
-    ipaddress.ip_network("172.16.0.0/12"),
-    ipaddress.ip_network("192.168.0.0/16"),
-    ipaddress.ip_network("169.254.0.0/16"),
-    ipaddress.ip_network("127.0.0.0/8"),
-    ipaddress.ip_network("::1/128"),
-    ipaddress.ip_network("fd00::/8"),
-    ipaddress.ip_network("fc00::/7"),
-]
 
-
-def _resolve_and_validate_target(url: str) -> bool:
-    """Resolve hostname to IPs and reject private/internal addresses.
-
-    Returns True if the target is safe to request, False for private IPs.
-    Used as a second line of defense after the API-level URL validation.
-    """
-    try:
-        hostname = urlparse(url).hostname
-        if not hostname:
-            return False
-        addrs = socket.getaddrinfo(hostname, 80, family=socket.AF_UNSPEC, type=socket.SOCK_STREAM)
-        for family, _, _, _, sockaddr in addrs:
-            ip_str = sockaddr[0]
-            try:
-                addr = ipaddress.ip_address(ip_str)
-                for net in _PRIVATE_SUBNETS:
-                    if addr in net:
-                        return False
-            except ValueError:
-                continue
-        return True
-    except (socket.gaierror, OSError, ValueError):
-        return False
 
 
 def _make_security_route_handler(page: Any) -> callable:
@@ -251,7 +216,7 @@ def _run_playwright_headless(target_url: str) -> dict[str, Any]:
 
 
 def _capture_page_preview(target_url: str) -> bytes | None:
-    if not _resolve_and_validate_target(target_url):
+    if not resolve_and_validate_target(target_url):
         logger.warning("Page preview blocked private target: %s", target_url)
         return None
     if not PLAYWRIGHT_AVAILABLE:
@@ -335,7 +300,7 @@ def captcha_summary() -> dict[str, Any]:
 def _run_cloud_stealth_browser(target_url: str) -> dict[str, Any]:
     if not BROWSERLESS_API_KEY:
         return {}
-    if not _resolve_and_validate_target(target_url):
+    if not resolve_and_validate_target(target_url):
         logger.warning("Cloud stealth blocked private target: %s", target_url)
         return {}
     logger.info("Cloud stealth: connecting to browserless.io for %s", target_url)
@@ -373,7 +338,7 @@ def _run_cloud_stealth_browser(target_url: str) -> dict[str, Any]:
 # ── Tier 4: urllib/BeautifulSoup ──
 
 def _extract_seo_via_urllib(target_url: str) -> dict[str, Any]:
-    if not _resolve_and_validate_target(target_url):
+    if not resolve_and_validate_target(target_url):
         logger.warning("urllib blocked private target: %s", target_url)
         return {}
     import urllib.request
@@ -432,7 +397,7 @@ def _check_link_health(links: list[str], base_url: str) -> dict[str, Any]:
     redirects: list[str] = []
 
     def _check_one(link: str) -> tuple[str, str | None]:
-        if not _resolve_and_validate_target(link):
+        if not resolve_and_validate_target(link):
             return (link, "broken")
         try:
             client = sync_client()
@@ -473,7 +438,7 @@ def _check_link_health(links: list[str], base_url: str) -> dict[str, Any]:
 def run_local_opensource_seo_audit(target_url: str, crawl_mode: str = "single") -> dict[str, Any]:
     raw: dict[str, Any] = {}
 
-    if not _resolve_and_validate_target(target_url):
+    if not resolve_and_validate_target(target_url):
         logger.warning("Blocked crawl to private/internal address: %s", target_url)
         return raw
 

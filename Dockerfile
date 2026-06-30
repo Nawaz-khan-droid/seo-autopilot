@@ -15,12 +15,20 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 RUN playwright install chromium --with-deps 2>/dev/null || true
 
-# Copy application
-COPY . .
+# Copy application (specific dirs only — never COPY . .)
+COPY api/ api/
+COPY config/ config/
+COPY modules/ modules/
+COPY report/ report/
+COPY orchestrator/ orchestrator/
+COPY scripts/ scripts/
+COPY main.py run_report.py streamlit_app.py requirements.txt ./
+COPY db/init.sql db/init.sql
 
 # Expose FastAPI port
-EXPOSE 7860
+ARG PORT=8000
+ENV PORT=${PORT}
+EXPOSE ${PORT}
 
-# Default: run FastAPI server (HF Spaces expects port 7860)
-# Add SSL: mount cert.pem + key.pem and set SSL_CERTFILE / SSL_KEYFILE env vars
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "7860", "--workers", "4"]
+# Default: run FastAPI server
+CMD uvicorn api.main:app --host 0.0.0.0 --port ${PORT} --workers ${WEB_CONCURRENCY:-4}

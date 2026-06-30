@@ -21,6 +21,13 @@ from typing import Any
 
 import httpx
 
+try:
+    import redis.asyncio as aioredis
+    _REDIS_AVAILABLE = True
+except ImportError:
+    aioredis = None  # type: ignore[assignment]
+    _REDIS_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_MAX_REQUESTS = 10
@@ -54,7 +61,8 @@ class RateLimiter:
 
         if redis_url:
             try:
-                import redis.asyncio as aioredis
+                if not _REDIS_AVAILABLE or aioredis is None:
+                    raise ImportError("redis.asyncio not available")
                 self._redis_client = aioredis.from_url(
                     redis_url,
                     encoding="utf-8",
@@ -89,7 +97,8 @@ class RateLimiter:
 
     def _check_redis(self, ip: str) -> bool:
         try:
-            import redis.asyncio as aioredis
+            if not _REDIS_AVAILABLE or aioredis is None:
+                raise ImportError("redis.asyncio not available")
             key = f"ratelimit:{ip}"
             now = time.time()
             cutoff = now - self.window
