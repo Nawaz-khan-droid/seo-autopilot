@@ -229,40 +229,53 @@ def _discover_keywords_from_page(target_url: str, existing_metrics: dict | None 
     if not resolve_and_validate_target(target_url):
         logger.warning("Keyword discovery blocked private target: %s", target_url)
         return kws
-    if not kws:
-        title = ""
-        h1_texts = []
-        if existing_metrics and isinstance(existing_metrics, dict):
-            title = existing_metrics.get("title", "") or ""
-            h1_texts = existing_metrics.get("h1_texts", []) or []
-        if not title and not h1_texts:
-            import urllib.request
-            from bs4 import BeautifulSoup
-            try:
-                req = urllib.request.Request(
-                    target_url,
-                    headers={"User-Agent": "Mozilla/5.0"},
-                )
-                with urllib.request.urlopen(req, timeout=10) as resp:
-                    html = resp.read()
-                soup = BeautifulSoup(html, "html.parser")
-                title = soup.title.string.strip() if soup.title and soup.title.string else ""
-                h1 = soup.find("h1")
-                if h1 and h1.get_text(strip=True):
-                    h1_texts = [h1.get_text(strip=True)]
-            except Exception as e:
-                logger.debug("Keyword discovery page fetch failed: %s", e)
-        if title:
-            words = [w for w in title.split() if len(w) > 2]
+    title = ""
+    h1_texts = []
+    meta_desc = ""
+    if existing_metrics and isinstance(existing_metrics, dict):
+        title = existing_metrics.get("title", "") or ""
+        h1_texts = existing_metrics.get("h1_texts", []) or []
+        meta_desc = existing_metrics.get("meta_description", "") or ""
+    if not title and not h1_texts:
+        import urllib.request
+        from bs4 import BeautifulSoup
+        try:
+            req = urllib.request.Request(
+                target_url,
+                headers={"User-Agent": "Mozilla/5.0"},
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                html = resp.read()
+            soup = BeautifulSoup(html, "html.parser")
+            title = soup.title.string.strip() if soup.title and soup.title.string else ""
+            h1 = soup.find("h1")
+            if h1 and h1.get_text(strip=True):
+                h1_texts = [h1.get_text(strip=True)]
+            meta_tag = soup.find("meta", attrs={"name": "description"})
+            if meta_tag and meta_tag.get("content"):
+                meta_desc = meta_tag["content"].strip()
+        except Exception as e:
+            logger.debug("Keyword discovery page fetch failed: %s", e)
+    # Extract from title
+    if title:
+        words = [w for w in title.split() if len(w) > 2]
+        if words:
+            kws.append(" ".join(words[:4]))
+            if len(words) > 4:
+                kws.append(" ".join(words[:3]))
+    # Extract from H1
+    if h1_texts:
+        for h1_text in h1_texts[:3]:
+            words = [w for w in h1_text.split() if len(w) > 2]
             if words:
                 kws.append(" ".join(words[:4]))
-                if len(words) > 4:
-                    kws.append(" ".join(words[:3]))
-        if h1_texts:
-            for h1_text in h1_texts[:3]:
-                words = [w for w in h1_text.split() if len(w) > 2]
-                if words:
-                    kws.append(" ".join(words[:4]))
+    # Extract from meta description (noun phrases)
+    if meta_desc:
+        words = [w for w in meta_desc.split() if len(w) > 3]
+        for i in range(len(words) - 1):
+            phrase = f"{words[i]} {words[i+1]}"
+            if len(phrase) > 5:
+                kws.append(phrase)
     seen: set[str] = set()
     result: list[str] = []
     for kw in kws:

@@ -187,7 +187,20 @@ def _run_playwright_headless(target_url: str) -> dict[str, Any]:
 
         page.on("response", _on_response)
         page.goto(target_url, wait_until="networkidle", timeout=30000)
-        page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
+        # Full scroll to trigger lazy-loaded images
+        page.evaluate("""
+            async () => {
+                const delay = ms => new Promise(r => setTimeout(r, ms));
+                const height = document.body.scrollHeight;
+                const step = Math.floor(height / 4);
+                for (let y = 0; y <= height; y += step) {
+                    window.scrollTo(0, y);
+                    await delay(300);
+                }
+                window.scrollTo(0, 0);
+                await delay(500);
+            }
+        """)
 
         all_links = page.evaluate("""
             () => Array.from(document.querySelectorAll('a[href]'))

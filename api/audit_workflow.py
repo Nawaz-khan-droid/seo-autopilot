@@ -126,6 +126,10 @@ def _generate_deliverables(
     final_metrics["rankings_top_10"] = top10
     if facts.backlinks.total_backlinks.is_available and facts.backlinks.total_backlinks.value is not None:
         final_metrics["backlinks_count"] = facts.backlinks.total_backlinks.value
+    elif facts.backlinks.domain_rating.is_available and facts.backlinks.domain_rating.value is not None:
+        final_metrics["backlinks_count"] = f"DR {facts.backlinks.domain_rating.value}"
+    else:
+        final_metrics["backlinks_count"] = None
 
     _generate_narrative(facts, crawl_result, context_prompt, defensive_payload)
 
