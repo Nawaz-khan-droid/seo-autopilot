@@ -43,6 +43,7 @@ from api.errors import (
     NotFoundError, AuthError, ProviderUnavailable, DataUnavailable,
     RequestIDMiddleware, current_request_id,
 )
+from api.browser_manager import close_all_browsers
 from api.rate_limiter import rate_limiter
 from config.sheet_schema import TabName, TAB_TO_KEY
 from modules.http_pool import sync_client, async_client, close_clients
@@ -65,6 +66,7 @@ async def _lifespan(app: FastAPI):
     yield
     logger.info("Shutting down — closing HTTP connections and Playwright browsers")
     await close_clients()
+    close_all_browsers()
 
 
 app = FastAPI(
@@ -76,10 +78,13 @@ app = FastAPI(
 
 # Parse CORS origins from env (comma-separated), filter empties
 _ALLOWED_ORIGINS = [o.strip() for o in CORS_ORIGINS.split(",") if o.strip()]
+# Always allow Vercel domains (production + preview deployments)
+_VERCEL_REGEX = r"https://.*\.vercel\.app"
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_ALLOWED_ORIGINS,
+    allow_origin_regex=_VERCEL_REGEX,
     allow_methods=["*"],
     allow_headers=["*"],
 )

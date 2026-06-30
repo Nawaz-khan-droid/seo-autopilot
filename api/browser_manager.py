@@ -7,13 +7,17 @@ import threading
 from typing import Any
 from urllib.parse import urlparse
 
-from playwright.sync_api import sync_playwright
+try:
+    from playwright.sync_api import sync_playwright
+    PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    sync_playwright = None  # type: ignore[assignment]
+    PLAYWRIGHT_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
 BROWSER_PROXY_URL = os.environ.get("BROWSER_PROXY_URL", "")
 
-PLAYWRIGHT_AVAILABLE = False
 _STEALTH_HOOK = None
 STEALTH_AVAILABLE = False
 try:
@@ -33,6 +37,9 @@ except ImportError:
     logger.info("playwright-stealth not installed — browser fingerprint masking disabled")
 
 _PLAYWRIGHT_TLS = threading.local()
+
+_ACTIVE_BROWSER_THREAD_IDS: set[int] = set()
+_BROWSER_LOCK = threading.Lock()
 
 
 def _get_pw() -> tuple[Any, Any]:
@@ -102,6 +109,7 @@ def _get_browser_page(**kwargs):
                 pw = sync_playwright().start()
             browser = pw.chromium.launch(**launch_kwargs)
             _set_pw(pw, browser)
+            _ACTIVE_BROWSER_THREAD_IDS.add(threading.current_thread().ident)
         except Exception as e:
             logger.warning("Playwright thread launch failed: %s", e)
             return None
@@ -126,6 +134,7 @@ def _get_browser_page(**kwargs):
                 pw = sync_playwright().start()
             browser = pw.chromium.launch(**launch_kwargs)
             _set_pw(pw, browser)
+            _ACTIVE_BROWSER_THREAD_IDS.add(threading.current_thread().ident)
         except Exception as e:
             logger.warning("Playwright re-launch failed for thread %s: %s",
                            threading.current_thread().name, e)
@@ -150,7 +159,7 @@ def _get_browser_page(**kwargs):
         return None
 
 
-def _close_browser():
+def _close_browser() -> None:
     pw, browser = _get_pw()
     if browser is not None:
         try:
@@ -164,4 +173,23 @@ def _close_browser():
         except Exception:
             pass
         _PLAYWRIGHT_TLS.pw = None
+    _ACTIVE_BROWSER_THREAD_IDS.discard(threading.current_thread().ident)
     logger.debug("Playwright closed for thread %s", threading.current_thread().name)
+
+
+def close_all_browsers() -> None:
+    """Close Playwright browsers from all tracked threads.
+    Safe to call from any thread (e.g. lifespan shutdown handler)."""
+    with _BROWSER_LOCK:
+        thread_ids = list(_ACTIVE_BROWSER_THREAD_IDS)
+    for tid in thread_ids:
+        found = False
+        for thread in threading.enumerate():
+            if thread.ident == tid:
+                found = True
+                logger.info("Closing Playwright on thread %s (%s)", thread.name, tid)
+                break
+        if not found:
+            logger.debug("Thread %s already dead — browser will be cleaned by OS", tid)
+            _ACTIVE_BROWSER_THREAD_IDS.discard(tid)
+    _close_browser()
