@@ -7,6 +7,9 @@ __pycache__/
 .pytest_cache/
 output/
 !output/.gitkeep
+storage/
+memories/
+scripts/_test_output/
 *.pem
 *.key
 cert.pem
