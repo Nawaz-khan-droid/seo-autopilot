@@ -246,7 +246,15 @@ def _run_audit_impl(
         logger.warning("Niche classifier failed (non-fatal): %s", e)
 
     # ── Shared data fetch: parallel PSI/backlinks/GSC/GA4 + link health ──
-    parallel = _fetch_parallel(url)
+    link_health = local_metrics.get("link_health", {})
+    all_hrefs = link_health.get("all_hrefs", [])
+
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        parallel_future = pool.submit(_fetch_parallel, url)
+        link_health_future = pool.submit(_check_link_health, all_hrefs, url) if all_hrefs else None
+
+    parallel = parallel_future.result()
     psi_mobile = parallel["psi_mobile"]
     psi_desktop = parallel["psi_desktop"]
     backlinks_data = parallel["backlinks"]
@@ -255,9 +263,7 @@ def _run_audit_impl(
 
     final_metrics = dict(defensive_payload)
 
-    link_health = local_metrics.get("link_health", {})
-    all_hrefs = link_health.get("all_hrefs", [])
-    link_health_data = _check_link_health(all_hrefs, url) if all_hrefs else None
+    link_health_data = link_health_future.result() if link_health_future is not None else None
 
     # ── Branch: crawl source (only unique part per path) ──
     if not fc.available:

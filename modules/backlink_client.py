@@ -171,6 +171,41 @@ def _fetch_openpagerank(domain: str) -> dict[str, Any] | None:
     return None
 
 
+def _find_mentions_via_ddg(domain: str) -> dict[str, Any] | None:
+    """Find backlink mentions using DuckDuckGo search. Free, no API key."""
+    try:
+        from duckduckgo_search import DDGS
+        refs: list[str] = []
+        with DDGS() as ddgs:
+            results = list(ddgs.text(f'"{domain}" -site:{domain}', max_results=20))
+        for r in results:
+            href = r.get("href", "")
+            if href and domain not in href:
+                refs.append(href)
+        if refs:
+            unique_domains: set[str] = set()
+            for u in refs:
+                try:
+                    from urllib.parse import urlparse
+                    unique_domains.add(urlparse(u).netloc.lower())
+                except Exception:
+                    pass
+            return {
+                "domain": domain,
+                "status": "AVAILABLE",
+                "total_backlinks": str(len(refs)),
+                "ref_domains": str(len(unique_domains)),
+                "dofollow": None,
+                "nofollow": None,
+                "dr": None,
+                "source": "DuckDuckGo",
+                "checked_at": datetime.now().isoformat(timespec="seconds"),
+            }
+    except Exception as e:
+        logger.debug("DuckDuckGo mention search failed for %s: %s", domain, e)
+    return None
+
+
 def fetch_backlinks(url: str) -> dict[str, Any]:
     domain = _domain_from_url(url)
 
@@ -185,6 +220,10 @@ def fetch_backlinks(url: str) -> dict[str, Any]:
     scraped = _try_browseros_scrape(domain)
     if scraped:
         return _save_cache(domain, scraped)
+
+    ddg = _find_mentions_via_ddg(domain)
+    if ddg:
+        return _save_cache(domain, ddg)
 
     opr = _fetch_openpagerank(domain)
     if opr:

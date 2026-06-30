@@ -187,20 +187,6 @@ def _run_playwright_headless(target_url: str) -> dict[str, Any]:
 
         page.on("response", _on_response)
         page.goto(target_url, wait_until="networkidle", timeout=30000)
-        # Full scroll to trigger lazy-loaded images
-        page.evaluate("""
-            async () => {
-                const delay = ms => new Promise(r => setTimeout(r, ms));
-                const height = document.body.scrollHeight;
-                const step = Math.floor(height / 4);
-                for (let y = 0; y <= height; y += step) {
-                    window.scrollTo(0, y);
-                    await delay(300);
-                }
-                window.scrollTo(0, 0);
-                await delay(500);
-            }
-        """)
 
         all_links = page.evaluate("""
             () => Array.from(document.querySelectorAll('a[href]'))
@@ -394,17 +380,14 @@ def _extract_seo_via_urllib(target_url: str) -> dict[str, Any]:
 def _check_link_health(links: list[str], base_url: str) -> dict[str, Any]:
     domain = _domain_from_url(base_url)
     internal_links: list[str] = []
-    external_links: list[str] = []
 
-    for l in links[:50]:
+    for l in links[:30]:
         if not l.startswith("http"):
             continue
         parsed = urlparse(l)
         netloc = parsed.netloc.lower().replace("www.", "").split(":")[0]
         if netloc == domain or not parsed.netloc:
             internal_links.append(l)
-        else:
-            external_links.append(l)
 
     broken: list[str] = []
     redirects: list[str] = []
@@ -414,9 +397,9 @@ def _check_link_health(links: list[str], base_url: str) -> dict[str, Any]:
             return (link, "broken")
         try:
             client = sync_client()
-            r = client.head(link, follow_redirects=False, timeout=5.0)
+            r = client.head(link, follow_redirects=False, timeout=3.0)
             if r.status_code == 405:
-                r2 = client.get(link, timeout=5.0)
+                r2 = client.get(link, timeout=3.0)
                 return (link, "broken" if r2.status_code >= 400 else None)
             if r.status_code >= 400:
                 return (link, "broken")
@@ -427,7 +410,7 @@ def _check_link_health(links: list[str], base_url: str) -> dict[str, Any]:
             return (link, "broken")
 
     if internal_links:
-        with ThreadPoolExecutor(max_workers=5) as pool:
+        with ThreadPoolExecutor(max_workers=8) as pool:
             futures = [pool.submit(_check_one, link) for link in internal_links]
             for f in as_completed(futures):
                 link, result = f.result()

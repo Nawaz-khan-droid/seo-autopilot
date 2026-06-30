@@ -61,3 +61,6 @@ groq>=0.9.0
 
 # File uploads (implicit FastAPI dependency for UploadFile)
 python-multipart>=0.0.9
+
+# Free backlink discovery (DuckDuckGo search)
+duckduckgo-search>=8.0.0
