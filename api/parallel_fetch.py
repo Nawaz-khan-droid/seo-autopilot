@@ -275,15 +275,82 @@ def _discover_keywords_from_page(target_url: str, existing_metrics: dict | None 
 
 # ── SERP rank tracking ──
 
+def _search_google_via_playwright(keyword: str, target_url: str) -> list[dict[str, Any]]:
+    """Scrape Google search results via Playwright. Returns list of
+    {position, url, title} for organic results on page 1."""
+    if not PLAYWRIGHT_AVAILABLE:
+        return []
+    if not resolve_and_validate_target(target_url):
+        return []
+
+    from modules.url_utils import exact_url_match
+    results: list[dict[str, Any]] = []
+    page = None
+    try:
+        page = _get_browser_page(viewport={"width": 1280, "height": 900})
+        if page is None:
+            return []
+        if STEALTH_AVAILABLE and _STEALTH_HOOK is not None:
+            _STEALTH_HOOK.apply_stealth_sync(page)
+
+        import random as _rand
+        from urllib.parse import quote
+        search_url = f"https://www.google.com/search?q={quote(keyword)}&hl=en&num=10"
+        page.goto(search_url, wait_until="domcontentloaded", timeout=15000)
+        page.wait_for_timeout(_rand.uniform(800, 1500))
+
+        # CAPTCHA check
+        for sel in ["form[action*='captcha']", "#captcha", "div.g-recaptcha", "#gs_captcha_ccl"]:
+            try:
+                if page.locator(sel).is_visible(timeout=600):
+                    logger.info("Google CAPTCHA detected for keyword '%s'", keyword)
+                    return []
+            except Exception:
+                pass
+
+        # Parse organic results
+        organic = page.evaluate("""
+            () => {
+                const results = [];
+                document.querySelectorAll('div.g, div[data-sokoban-container]').forEach((el, i) => {
+                    const link = el.querySelector('a[href]');
+                    const title = el.querySelector('h3');
+                    if (link && title) {
+                        results.push({
+                            position: i + 1,
+                            url: link.href,
+                            title: title.textContent || ''
+                        });
+                    }
+                });
+                return results;
+            }
+        """) or []
+
+        for r in organic:
+            if r.get("url") and r.get("position"):
+                results.append({
+                    "position": r["position"],
+                    "url": r["url"],
+                    "title": r.get("title", ""),
+                })
+    except Exception as e:
+        logger.debug("Playwright SERP search failed for '%s': %s", keyword, e)
+    finally:
+        if page is not None:
+            try:
+                page.close()
+            except Exception:
+                pass
+    return results
+
+
 def _fetch_rankings_via_serp(
     target_url: str,
     keywords: list[str] | None = None,
     existing_metrics: dict | None = None,
 ) -> list[RankingRow]:
     from api.rank_providers import any_provider_available
-    if not any_provider_available():
-        logger.info("SERP rank check skipped: no provider API keys configured")
-        return []
 
     domain = _domain_from_url(target_url)
     rows: list[RankingRow] = []
@@ -296,7 +363,7 @@ def _fetch_rankings_via_serp(
     cache = _load_rank_cache(domain)
     uncached: list[str] = []
 
-    for kw in keywords[:15]:
+    for kw in keywords[:10]:
         cached_row = cache.get(kw)
         if cached_row and cached_row.get("position") is not None:
             rows.append(RankingRow(
@@ -312,34 +379,59 @@ def _fetch_rankings_via_serp(
         logger.info("Rank cache hit for all %d keywords for %s", len(rows), domain)
         return rows
 
-    from api.rank_providers import try_providers
+    if any_provider_available():
+        # Use API providers (fast, reliable)
+        from api.rank_providers import try_providers
 
-    def _check_one(kw: str) -> RankingRow | None:
-        try:
-            pos, ranking_url, provider = try_providers(
-                keyword=kw, target_url=target_url,
-                location="India", device="desktop",
-            )
-            if pos is not None:
-                _save_rank_cache(domain, kw, {"position": str(pos), "ts": time.time()})
-                return RankingRow(
-                    keyword=kw,
-                    position=Evidence.verified(str(pos), provider or "SERP"),
-                    search_volume=0,
-                    competition="medium",
+        def _check_one(kw: str) -> RankingRow | None:
+            try:
+                pos, ranking_url, provider = try_providers(
+                    keyword=kw, target_url=target_url,
+                    location="India", device="desktop",
                 )
-            _save_rank_cache(domain, kw, {"position": None, "ts": time.time()})
-            return None
-        except Exception as e:
-            logger.debug("SERP lookup failed for '%s': %s", kw, e)
-            return None
+                if pos is not None:
+                    _save_rank_cache(domain, kw, {"position": str(pos), "ts": time.time()})
+                    return RankingRow(
+                        keyword=kw,
+                        position=Evidence.verified(str(pos), provider or "SERP"),
+                        search_volume=0,
+                        competition="medium",
+                    )
+                _save_rank_cache(domain, kw, {"position": None, "ts": time.time()})
+                return None
+            except Exception as e:
+                logger.debug("SERP lookup failed for '%s': %s", kw, e)
+                return None
 
-    with ThreadPoolExecutor(max_workers=5) as pool:
-        futures = [pool.submit(_check_one, kw) for kw in uncached]
-        for f in futures:
-            result = f.result()
-            if result is not None:
-                rows.append(result)
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            futures = [pool.submit(_check_one, kw) for kw in uncached]
+            for f in futures:
+                result = f.result()
+                if result is not None:
+                    rows.append(result)
+    else:
+        # Fallback: scrape Google via Playwright (slower, no API key needed)
+        logger.info("No SERP API keys — using Playwright fallback for %d keywords", len(uncached))
+        from modules.url_utils import exact_url_match
+        for kw in uncached[:5]:  # limit to 5 to avoid CAPTCHA
+            try:
+                serp_results = _search_google_via_playwright(kw, target_url)
+                pos = None
+                for r in serp_results:
+                    if exact_url_match(target_url, r["url"]):
+                        pos = r["position"]
+                        break
+                _save_rank_cache(domain, kw, {"position": str(pos) if pos else None, "ts": time.time()})
+                if pos is not None:
+                    rows.append(RankingRow(
+                        keyword=kw,
+                        position=Evidence.verified(str(pos), "Google (Playwright)"),
+                        search_volume=0,
+                        competition="medium",
+                    ))
+                time.sleep(_rand.uniform(2.0, 4.0))  # anti-CAPTCHA delay
+            except Exception as e:
+                logger.debug("Playwright SERP fallback failed for '%s': %s", kw, e)
 
     logger.info("SERP rank check: %d/%d keywords for %s", len(rows), len(keywords[:15]), domain)
     return rows
