@@ -32,6 +32,11 @@ def _client_available(provider: str) -> bool:
     return False
 
 
+def any_provider_available() -> bool:
+    """Check if any SERP provider is configured. Used to skip rank checks early."""
+    return any(_client_available(p) for p in _LIGHTWEIGHT_PROVIDERS)
+
+
 def _search_single(
     provider: str, keyword: str, location: str, device: str,
 ) -> dict[str, Any] | None:

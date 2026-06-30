@@ -280,6 +280,11 @@ def _fetch_rankings_via_serp(
     keywords: list[str] | None = None,
     existing_metrics: dict | None = None,
 ) -> list[RankingRow]:
+    from api.rank_providers import any_provider_available
+    if not any_provider_available():
+        logger.info("SERP rank check skipped: no provider API keys configured")
+        return []
+
     domain = _domain_from_url(target_url)
     rows: list[RankingRow] = []
 
@@ -348,6 +353,7 @@ def _fetch_google_trends(keyword: str, timeframe: str = "today 12-m") -> dict | 
     except Exception:
         SERPAPI_KEY = os.environ.get("SERPAPI_KEY", "")
     if not SERPAPI_KEY:
+        logger.debug("Google Trends skipped: SERPAPI_KEY not set")
         return None
 
     try:

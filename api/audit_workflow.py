@@ -136,7 +136,10 @@ def _generate_deliverables(
     _ensure_facts_data(facts)
     _run_llm_action_plan(facts)
 
-    serp_preview = _capture_serp_preview(url)
+    try:
+        serp_preview = _capture_serp_preview(url)
+    except Exception:
+        serp_preview = None
 
     audit_name = f"{client_name} Technical SEO Audit {month}.docx"
     audit_path = OUTPUT_DIR / audit_name
