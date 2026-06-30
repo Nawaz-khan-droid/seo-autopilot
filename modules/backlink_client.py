@@ -31,6 +31,7 @@ def _domain_from_url(url: str) -> str:
         .replace("www.", "")
         .split("/")[0]
         .split("?")[0]
+        .lower()
     )
 
 

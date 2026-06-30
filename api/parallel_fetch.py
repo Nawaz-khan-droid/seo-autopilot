@@ -40,7 +40,7 @@ def _domain_from_url(url: str) -> str:
 # ── Rank cache (JSON, keyed by domain+keyword, 1h TTL) ──
 
 def _rank_cache_path(domain: str) -> Path:
-    safe = domain.replace(".", "_").replace(":", "_")
+    safe = domain.lower().replace(".", "_").replace(":", "_")
     return RANK_CACHE_DIR / f"{safe}_ranks.json"
 
 
