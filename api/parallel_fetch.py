@@ -224,7 +224,19 @@ def _fetch_parallel(url: str) -> dict[str, Any]:
 
 # ── Keyword discovery from page content ──
 
+_STOP_WORDS = frozenset({
+    "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
+    "of", "with", "by", "from", "is", "it", "its", "this", "that", "are",
+    "was", "be", "has", "had", "have", "will", "can", "may", "not", "no",
+    "we", "our", "you", "your", "they", "their", "he", "she", "his", "her",
+    "my", "me", "us", "them", "who", "what", "how", "why", "when", "where",
+    "which", "than", "then", "also", "just", "about", "more", "all", "any",
+    "some", "each", "every", "much", "many", "very", "so", "if", "do",
+    "does", "did", "being", "into", "over", "after", "before", "between",
+})
+
 def _discover_keywords_from_page(target_url: str, existing_metrics: dict | None = None) -> list[str]:
+    """Extract meaningful keyword phrases from page title, H1, and meta description."""
     kws: list[str] = []
     if not resolve_and_validate_target(target_url):
         logger.warning("Keyword discovery blocked private target: %s", target_url)
@@ -256,26 +268,44 @@ def _discover_keywords_from_page(target_url: str, existing_metrics: dict | None 
                 meta_desc = meta_tag["content"].strip()
         except Exception as e:
             logger.debug("Keyword discovery page fetch failed: %s", e)
-    # Extract from title
+
+    def _clean_phrase(phrase: str) -> str:
+        """Remove stop words and clean a phrase."""
+        words = [w for w in phrase.split() if w.lower() not in _STOP_WORDS and len(w) > 1]
+        return " ".join(words[:5])
+
+    # Extract from title — most authoritative source
     if title:
-        words = [w for w in title.split() if len(w) > 2]
-        if words:
-            kws.append(" ".join(words[:4]))
-            if len(words) > 4:
-                kws.append(" ".join(words[:3]))
+        # Split on common separators: |, -, —, :
+        import re
+        parts = re.split(r'\s*[\|\-\—\:]\s*', title)
+        for part in parts:
+            cleaned = _clean_phrase(part)
+            if cleaned and len(cleaned) > 4:
+                kws.append(cleaned)
+
     # Extract from H1
     if h1_texts:
-        for h1_text in h1_texts[:3]:
-            words = [w for w in h1_text.split() if len(w) > 2]
-            if words:
-                kws.append(" ".join(words[:4]))
-    # Extract from meta description (noun phrases)
+        for h1_text in h1_texts[:2]:
+            cleaned = _clean_phrase(h1_text)
+            if cleaned and len(cleaned) > 4:
+                kws.append(cleaned)
+
+    # Extract brand name from domain as a keyword
+    from urllib.parse import urlparse
+    domain = urlparse(target_url).netloc.lower().replace("www.", "").split(".")[0]
+    if domain and len(domain) > 2:
+        kws.append(domain.title())
+
+    # Extract meaningful phrases from meta description (3+ word noun phrases)
     if meta_desc:
-        words = [w for w in meta_desc.split() if len(w) > 3]
-        for i in range(len(words) - 1):
-            phrase = f"{words[i]} {words[i+1]}"
-            if len(phrase) > 5:
+        import re
+        desc_words = [w for w in re.split(r'\s+', meta_desc) if w.lower() not in _STOP_WORDS and len(w) > 2]
+        for i in range(len(desc_words) - 2):
+            phrase = " ".join(desc_words[i:i+3])
+            if len(phrase) > 8:
                 kws.append(phrase)
+
     seen: set[str] = set()
     result: list[str] = []
     for kw in kws:
@@ -426,26 +456,31 @@ def _fetch_rankings_via_serp(
 
     # Playwright fallback when no results from API providers (or no keys at all)
     if len(rows) == before and uncached:
-        logger.info("Playwright SERP fallback for up to 2 keywords")
+        logger.info("ddgs SERP fallback for up to 5 keywords")
         from modules.url_utils import exact_url_match
-        for kw in uncached[:2]:
-            try:
-                serp_results = _search_google_via_playwright(kw, target_url)
-                pos = None
-                for r in serp_results:
-                    if exact_url_match(target_url, r["url"]):
-                        pos = r["position"]
-                        break
-                _save_rank_cache(domain, kw, {"position": str(pos) if pos else None, "ts": time.time()})
-                if pos is not None:
-                    rows.append(RankingRow(
-                        keyword=kw,
-                        position=Evidence.verified(str(pos), "Google (Playwright)"),
-                        search_volume=0,
-                        competition="medium",
-                    ))
-            except Exception as e:
-                logger.debug("Playwright SERP fallback failed for '%s': %s", kw, e)
+        try:
+            from ddgs import DDGS
+            for kw in uncached[:5]:
+                try:
+                    ddg_results = list(DDGS().text(f"{kw} {domain}", max_results=10))
+                    pos = None
+                    for i, r in enumerate(ddg_results, start=1):
+                        href = r.get("href", "") or r.get("link", "")
+                        if href and exact_url_match(target_url, href):
+                            pos = i
+                            break
+                    _save_rank_cache(domain, kw, {"position": str(pos) if pos else None, "ts": time.time()})
+                    if pos is not None:
+                        rows.append(RankingRow(
+                            keyword=kw,
+                            position=Evidence.verified(str(pos), "DuckDuckGo"),
+                            search_volume=0,
+                            competition="medium",
+                        ))
+                except Exception as e:
+                    logger.debug("ddgs SERP search failed for '%s': %s", kw, e)
+        except ImportError:
+            logger.warning("ddgs library not installed — skipping free SERP fallback")
 
     # Fallback: when keywords were discovered but no rank positions found,
     # still return them so keywords_tracked > 0 in the dashboard.

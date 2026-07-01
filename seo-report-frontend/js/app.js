@@ -50,20 +50,34 @@ function cycleProgressMessage(messages, interval = 2500, prefix = '') {
 function renderMetricsBar(containerId, metrics) {
   const bar = document.getElementById(containerId);
   if (!bar) return;
+
+  const cards = [];
+  const addCard = (value, label) => {
+    if (value !== null && value !== undefined && value !== '' && value !== '—') {
+      cards.push(`<div class="demo-metric"><div class="dm-value">${value}</div><div class="dm-label">${label}</div></div>`);
+    }
+  };
+
+  addCard((metrics.health_score || metrics.healthScore) + '/100', 'Technical Health');
+  addCard(metrics.pages_audited || metrics.pagesAudited, 'Pages Audited');
+  addCard(metrics.missing_h1_count ?? metrics.missingH1, 'Missing H1');
+  addCard(metrics.missing_meta_tags ?? metrics.missingMeta, 'Missing Meta');
+  addCard(metrics.missing_alt_tags ?? metrics.missingAlt, 'Missing Alt');
+  addCard(metrics.total_images_found ?? metrics.totalImagesFound, 'Images Found');
+  addCard(metrics.thin_pages_detected ?? metrics.thinPages, 'Thin Pages');
+  addCard(metrics.keywords_tracked, 'Keywords Tracked');
+  addCard(metrics.rankings_top_3, 'Top 3 Rankings');
+  addCard(metrics.rankings_top_10, 'Top 10 Rankings');
+  if (metrics.backlinks_count && metrics.backlinks_count !== 'No Data' && metrics.backlinks_count !== 'Data Pending') {
+    addCard(metrics.backlinks_count, 'Backlinks');
+  }
+
+  if (cards.length === 0) {
+    bar.style.display = 'none';
+    return;
+  }
   bar.style.display = 'grid';
-  bar.innerHTML = `
-    <div class="demo-metric"><div class="dm-value">${metrics.health_score || metrics.healthScore || '—'}/100</div><div class="dm-label">Technical Health</div></div>
-    <div class="demo-metric"><div class="dm-value">${metrics.pages_audited || metrics.pagesAudited || '—'}</div><div class="dm-label">Pages Audited</div></div>
-    <div class="demo-metric"><div class="dm-value">${metrics.missing_h1 ?? metrics.missing_h1_count ?? metrics.missingH1 ?? '—'}</div><div class="dm-label">Missing H1</div></div>
-    <div class="demo-metric"><div class="dm-value">${metrics.missing_meta ?? metrics.missing_meta_tags ?? metrics.missingMeta ?? '—'}</div><div class="dm-label">Missing Meta</div></div>
-    <div class="demo-metric"><div class="dm-value">${metrics.missing_alt ?? metrics.missing_alt_tags ?? metrics.missingAlt ?? '—'}</div><div class="dm-label">Missing Alt</div></div>
-    <div class="demo-metric"><div class="dm-value">${metrics.total_images_found ?? metrics.totalImagesFound ?? '—'}</div><div class="dm-label">Images Found</div></div>
-    <div class="demo-metric"><div class="dm-value">${metrics.thin_pages_detected ?? metrics.thinPages ?? '—'}</div><div class="dm-label">Thin Pages</div></div>
-    <div class="demo-metric"><div class="dm-value">${metrics.keywords_tracked ?? '—'}</div><div class="dm-label">Keywords Tracked</div></div>
-    <div class="demo-metric"><div class="dm-value">${metrics.rankings_top_3 ?? '—'}</div><div class="dm-label">Top 3 Rankings</div></div>
-    <div class="demo-metric"><div class="dm-value">${metrics.rankings_top_10 ?? '—'}</div><div class="dm-label">Top 10 Rankings</div></div>
-    <div class="demo-metric"><div class="dm-value">${metrics.backlinks_count ?? '—'}</div><div class="dm-label">Backlinks</div></div>
-  `;
+  bar.innerHTML = cards.join('');
 }
 
 function updatePreview(title, desc, url, extra) {
@@ -253,6 +267,30 @@ async function runDemo() {
     document.getElementById('demo-progress-msg').textContent = `Audit complete — ${data.client || siteUrl}`;
     showStatus('demo-status', `Live audit of ${siteUrl} completed successfully.`, 'success');
     showResults('demo-results');
+
+    // Generate dynamic suggestions from actual issues
+    const issues = data.issues || [];
+    const suggestionsEl = document.getElementById('demo-suggestions');
+    if (suggestionsEl) {
+      if (issues.length === 0) {
+        suggestionsEl.innerHTML = '<p style="color:var(--green);font-weight:500">No critical issues found. The page passes all checked SEO rules.</p>';
+      } else {
+        const p1 = issues.filter(i => i.severity === 'Critical' || i.severity === 'High');
+        const p2 = issues.filter(i => i.severity === 'Warning' || i.severity === 'Medium');
+        let html = '<ul style="font-size:13px;line-height:1.8;padding-left:20px;color:var(--body)">';
+        if (p1.length) {
+          html += `<li><strong>P1 — High (${p1.length} issues):</strong> ${p1.slice(0, 3).map(i => i.issue_text).join('; ')}.</li>`;
+        }
+        if (p2.length) {
+          html += `<li><strong>P2 — Medium (${p2.length} issues):</strong> ${p2.slice(0, 3).map(i => i.issue_text).join('; ')}.</li>`;
+        }
+        if (!p1.length && !p2.length) {
+          html += '<li>All issues are informational — no action required.</li>';
+        }
+        html += '</ul>';
+        suggestionsEl.innerHTML = html;
+      }
+    }
     showProgress(100, 'demo-');
 
     renderMetricsBar('demo-metrics', metrics);
