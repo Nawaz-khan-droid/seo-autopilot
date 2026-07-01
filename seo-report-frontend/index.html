@@ -99,9 +99,25 @@
       <a data-tab="reports" onclick="showTab('reports')">Reports</a>
       <a data-tab="pipeline" onclick="showTab('pipeline')">Pipeline</a>
       <a class="demo-btn" data-tab="demo" onclick="showTab('demo'); setTimeout(runDemo, 300)">Try Demo</a>
+      <a onclick="toggleSettings()" style="cursor:pointer;font-size:18px" title="API Settings">&#9881;</a>
     </nav>
   </div>
 </header>
+
+<!-- API Settings Modal -->
+<div id="api-settings-modal" onclick="if(event.target===this)this.style.display='none'" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;padding:24px;max-width:480px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+    <h3 style="margin:0 0 12px;color:var(--navy)">API Connection</h3>
+    <p style="font-size:13px;color:var(--gray);margin:0 0 16px">Enter your Codespaces backend URL. Find it in the terminal: <code>https://your-codespace-8000.app.github.dev</code></p>
+    <input id="api-url-input" type="url" placeholder="https://your-codespace-8000.app.github.dev"
+           style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;box-sizing:border-box">
+    <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
+      <button onclick="clearApiUrl()" style="padding:8px 16px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;font-size:13px">Use Same Origin</button>
+      <button onclick="saveApiUrl()" style="padding:8px 16px;border:none;border-radius:8px;background:var(--blue);color:#fff;cursor:pointer;font-size:13px">Save & Test</button>
+    </div>
+    <div id="api-settings-status" style="margin-top:12px;font-size:13px"></div>
+  </div>
+</div>
 
 <!-- ════════════════════════════════════════════ -->
 <!--  TAB: HOME – Landing + Value Grid           -->

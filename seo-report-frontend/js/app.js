@@ -110,8 +110,68 @@ function resetPreview() {
   if (meta) meta.style.display = 'none';
 }
 
+/* ── API Settings ── */
+function toggleSettings() {
+  const modal = document.getElementById('api-settings-modal');
+  const input = document.getElementById('api-url-input');
+  const status = document.getElementById('api-settings-status');
+  if (modal.style.display === 'none') {
+    modal.style.display = 'flex';
+    input.value = localStorage.getItem('seo_api_url') || '';
+    status.textContent = '';
+  } else {
+    modal.style.display = 'none';
+  }
+}
+
+async function saveApiUrl() {
+  const input = document.getElementById('api-url-input');
+  const status = document.getElementById('api-settings-status');
+  const url = input.value.trim().replace(/\/+$/, '');
+  if (!url) { status.textContent = 'Enter a URL first'; status.style.color = 'red'; return; }
+  API.setBaseUrl(url);
+  status.textContent = 'Testing connection...';
+  status.style.color = 'var(--gray)';
+  try {
+    const r = await API.health();
+    if (r.status === 'ok') {
+      status.textContent = 'Connected! API is running.';
+      status.style.color = 'var(--green)';
+      setTimeout(() => { document.getElementById('api-settings-modal').style.display = 'none'; }, 1200);
+    } else {
+      status.textContent = 'Unexpected response. Check the URL.';
+      status.style.color = 'orange';
+    }
+  } catch (e) {
+    status.textContent = 'Cannot connect. Is the Codespace running?';
+    status.style.color = 'red';
+  }
+}
+
+function clearApiUrl() {
+  localStorage.removeItem('seo_api_url');
+  API._storedUrl = null;
+  document.getElementById('api-url-input').value = '';
+  document.getElementById('api-settings-status').textContent = 'Cleared. Will use same origin.';
+  document.getElementById('api-settings-status').style.color = 'var(--gray)';
+}
+
 /* ── Initialization ── */
 document.addEventListener('DOMContentLoaded', () => {
+  /* Auto-detect API URL: if no saved URL and health check fails, show settings */
+  (async function autoDetectApi() {
+    if (localStorage.getItem('seo_api_url')) return; // already configured
+    try {
+      const r = await fetch(window.location.origin + '/api/health', { signal: AbortSignal.timeout(3000) });
+      if (!r.ok) throw new Error('not ok');
+      const data = await r.json();
+      if (data.status === 'ok') return; // same-origin API works
+    } catch {
+      // health check failed — show settings modal
+      setTimeout(() => toggleSettings(), 500);
+    }
+  })();
+
   /* Mobile nav toggle */
   const navToggle = document.getElementById('nav-toggle');
   const mainNav = document.getElementById('main-nav');

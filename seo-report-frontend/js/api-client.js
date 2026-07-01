@@ -1,5 +1,27 @@
 const API = {
-  BASE_URL: window.location.origin,
+  _storedUrl: null,
+
+  get BASE_URL() {
+    if (this._storedUrl) return this._storedUrl;
+    const saved = localStorage.getItem('seo_api_url');
+    if (saved) {
+      this._storedUrl = saved.replace(/\/+$/, '');
+      return this._storedUrl;
+    }
+    // Default: assume API is on same origin ( Codespaces self-hosted mode )
+    return window.location.origin;
+  },
+
+  setBaseUrl(url) {
+    url = (url || '').trim().replace(/\/+$/, '');
+    if (url) {
+      localStorage.setItem('seo_api_url', url);
+      this._storedUrl = url;
+    } else {
+      localStorage.removeItem('seo_api_url');
+      this._storedUrl = null;
+    }
+  },
 
   async health() {
     const r = await fetch(this.BASE_URL + '/api/health');
