@@ -261,6 +261,10 @@ def _generate_deliverables(
             {"page": i.page, "issue_text": i.issue_text, "severity": i.severity}
             for i in facts.technical.issues_list
         ],
+        "rankings": [
+            {"keyword": r.keyword, "position": getattr(r.position, "value", r.position)}
+            for r in (facts.rankings or [])
+        ],
     }
     if generated:
         result["download_url"] = f"/api/reports/download/{generated[0]['filename']}"

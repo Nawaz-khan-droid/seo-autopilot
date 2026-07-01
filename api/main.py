@@ -202,6 +202,11 @@ def _set_idempotent_result(key: str, result: dict[str, Any]) -> None:
 OUTPUT_DIR = Path(__file__).resolve().parent.parent / "output"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
+
+def _extract_rankings_for_cache(result: dict[str, Any]) -> list[dict[str, Any]]:
+    """Extract ranking rows from audit result for cache storage."""
+    return result.get("rankings", [])
+
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "seo-report-frontend"
 FRONTEND_DIR.mkdir(exist_ok=True)
 (FRONTEND_DIR / "css").mkdir(exist_ok=True)
@@ -330,8 +335,9 @@ def _build_facts(client_name: str, month: str, raw_data: dict[str, list[dict[str
     plan_raw = raw_data.get("plan_raw", [])
     competitor_raw = raw_data.get("competitor_raw", [])
 
-    if not rankings_raw and not history_raw:
-        raise HTTPException(503, "No ranking data available. Run the data pipeline first (main.py).")
+    # Allow report generation even without ranking data — show what we have
+    if not rankings_raw and not history_raw and not audit_raw:
+        raise HTTPException(503, "No data available. Run an audit first via /api/demo/generate or /api/audit/run.")
 
     facts = build_facts(
         keywords_raw=keywords_raw,
@@ -625,6 +631,20 @@ def _run_demo_background(job_id: str, url: str) -> None:
         for k, v in full_metrics.items():
             if v not in (None, 0, "", "No Data", "Data Pending"):
                 enriched[k] = v
+
+        # Bridge: write audit results to data cache so report endpoint can read them
+        try:
+            from api.data_cache import save_audit_results
+            save_audit_results(
+                url=url,
+                month=datetime.now().strftime("%B %Y"),
+                metrics=enriched,
+                issues=result.get("issues", []),
+                rankings=_extract_rankings_for_cache(result),
+            )
+        except Exception as cache_err:
+            logger.debug("Cache write skipped: %s", cache_err)
+
         _job_set(job_id, status="done", result={
             "success": result.get("success", True),
             "client": result.get("client", url),

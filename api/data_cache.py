@@ -91,6 +91,88 @@ def get_cache_metadata() -> dict[str, Any] | None:
         return None
 
 
+def save_audit_results(
+    url: str,
+    month: str,
+    metrics: dict[str, Any],
+    issues: list[dict[str, Any]] | None = None,
+    rankings: list[dict[str, Any]] | None = None,
+) -> None:
+    """Bridge function: write audit results to data cache so report endpoint can read them.
+
+    Converts the audit pipeline output into the tab-based format that
+    _load_raw_data() → _build_facts() expects.
+    """
+    _ensure_dir()
+    timestamp = datetime.now().isoformat(timespec="seconds")
+
+    # Technical audit tab
+    audit_tab = [{
+        "URL": url,
+        "Health Score": str(metrics.get("health_score", "")),
+        "Pages Audited": str(metrics.get("pages_audited", 1)),
+        "Missing H1": str(metrics.get("missing_h1_count", 0)),
+        "Missing Meta": str(metrics.get("missing_meta_tags", 0)),
+        "Missing Alt Tags": str(metrics.get("missing_alt_tags", 0)),
+        "Total Images": str(metrics.get("total_images_found", 0)),
+        "Thin Pages": str(metrics.get("thin_pages_detected", 0)),
+        "Title": metrics.get("title", ""),
+        "Meta Description": metrics.get("meta_description", ""),
+        "Word Count": str(metrics.get("word_count", 0)),
+        "Has Schema": "Yes" if metrics.get("has_yoast_schema") else "No",
+        "Has OG Tags": "Yes" if metrics.get("has_og_tags") else "No",
+    }]
+
+    # Keywords / Rankings tab
+    keywords_tab = []
+    rankings_tab = []
+    kw_list = rankings or []
+    for kw_data in kw_list:
+        kw = kw_data.get("keyword", "")
+        pos = kw_data.get("position", "")
+        if kw:
+            keywords_tab.append({
+                "Keyword": kw,
+                "Position": str(pos) if pos else "Not Found",
+                "Target URL": url,
+            })
+            rankings_tab.append({
+                "Keyword": kw,
+                "Position": str(pos) if pos else "Not Found",
+                "Target URL": url,
+                "Timestamp": timestamp,
+            })
+
+    # Issues tab
+    issues_tab = issues or []
+
+    tabs = {
+        "Site Audit": audit_tab,
+        "Keywords": keywords_tab,
+        "SERP Snapshot": rankings_tab,
+        "Website Tracking & Insights": [],
+        "AI Analysis": [],
+        "SERP History": [],
+        "Monthly SEO Plan": [],
+        "Competitor Snapshot": [],
+    }
+
+    for tab_name, records in tabs.items():
+        safe_name = tab_name.replace(" ", "_").lower()
+        filepath = CACHE_DIR / f"{safe_name}.json"
+        filepath.write_text(json.dumps(records, indent=2, default=str), encoding="utf-8")
+
+    metadata = {
+        "client_name": url,
+        "report_month": month,
+        "cached_at": timestamp,
+        "source": "audit_pipeline",
+        "tabs": ["Site Audit", "Keywords", "SERP Snapshot"],
+    }
+    METADATA_FILE.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    logger.info("Audit results cached: %d tabs for %s %s", len(tabs), url, month)
+
+
 def cleanup_old_reports(output_dir: str | Path, keep_per_type: int = 10) -> int:
     """Remove oldest report files per type, keeping only the latest N.
 
