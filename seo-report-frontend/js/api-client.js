@@ -1,5 +1,5 @@
 const API = {
-  BASE_URL: 'https://jubilant-bassoon-695gwrrpvqgxf69p-8000.app.github.dev',
+  BASE_URL: window.location.origin,
 
   async health() {
     const r = await fetch(this.BASE_URL + '/api/health');
