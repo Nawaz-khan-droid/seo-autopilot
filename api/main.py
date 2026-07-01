@@ -650,7 +650,7 @@ def _run_demo_background(job_id: str, url: str) -> None:
             "client": result.get("client", url),
             "month": result.get("month", datetime.now().strftime("%B %Y")),
             "metrics": enriched,
-            "issues": result.get("issues", []),
+            "issues": _quick_issues + result.get("issues", []),
             "niche": result.get("niche", "—"),
         })
     except Exception as e:

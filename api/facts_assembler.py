@@ -92,6 +92,21 @@ def _build_facts_from_audit(
                             keyword=kw,
                             position=Evidence.verified(pos, f"Sheet:{tab_name}"),
                         ))
+            # Read backlink data from sheet tabs
+            if any(kw in tl for kw in ["backlink", "link", "referring", "domain"]):
+                for rec in records:
+                    total_bl = rec.get("total_backlinks") or rec.get("Total Backlinks") or rec.get("backlinks") or rec.get("Backlinks")
+                    ref_dom = rec.get("ref_domains") or rec.get("Referring Domains") or rec.get("ref_domains") or rec.get("Ref Domains")
+                    dr_val = rec.get("domain_rating") or rec.get("Domain Rating") or rec.get("DR") or rec.get("DA")
+                    if total_bl or ref_dom or dr_val:
+                        facts.backlinks.status = "AVAILABLE"
+                        if total_bl:
+                            facts.backlinks.total_backlinks = Evidence.verified(str(total_bl), f"Sheet:{tab_name}")
+                        if ref_dom:
+                            facts.backlinks.ref_domains = Evidence.verified(str(ref_dom), f"Sheet:{tab_name}")
+                        if dr_val:
+                            facts.backlinks.domain_rating = Evidence.verified(str(dr_val), f"Sheet:{tab_name}")
+                        break  # Use first row with backlink data
 
     if not facts.rankings:
         serp_rows = _fetch_rankings_via_serp(url, existing_metrics=local_metrics)
@@ -166,6 +181,28 @@ def _build_facts_from_audit(
             ))
         if page.markdown and not re.search(r'^# ', page.markdown, re.MULTILINE):
             missing_h1 += 1
+
+    # Add on-page issues from crawl counts
+    if missing_h1:
+        issues_list.append(TechnicalIssue(
+            page=url, issue_text=f"{missing_h1} page(s) missing H1 tag",
+            severity="Warning",
+        ))
+    if missing_titles:
+        issues_list.append(TechnicalIssue(
+            page=url, issue_text=f"{missing_titles} page(s) missing meta description",
+            severity="Warning",
+        ))
+    if missing_alt:
+        issues_list.append(TechnicalIssue(
+            page=url, issue_text=f"{missing_alt} images missing alt text",
+            severity="Warning",
+        ))
+    if thin_pages:
+        issues_list.append(TechnicalIssue(
+            page=url, issue_text=f"{thin_pages} thin page(s) detected (< 300 words)",
+            severity="Medium",
+        ))
 
     if seo_rules_issues:
         rules_penalty = min(sum(3 for i in seo_rules_issues if i.get("severity") in ("critical", "warning")) +

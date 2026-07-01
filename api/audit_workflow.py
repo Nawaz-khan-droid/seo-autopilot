@@ -373,7 +373,7 @@ def _run_audit_impl(
             crawl_result = CrawlResult(pages=parsed_pages, total_pages=len(parsed_pages))
         else:
             crawl_result = CrawlResult(pages=[], total_pages=0)
-        sheet_tabs = None
+        sheet_tabs = _try_open_sheet(sheet_url) if sheet_url else None
     else:
         logger.info("Audit: crawling %s (mode=%s)", url, mode)
         if mode == "full":
