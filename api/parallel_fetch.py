@@ -110,7 +110,7 @@ def _capture_cwv_via_playwright(target_url: str, strategy: str = "mobile") -> di
                 Object.defineProperty(navigator, 'hardwareConcurrency', { value: 4 });
                 Object.defineProperty(navigator, 'deviceMemory', { value: 4 });
             """)
-        page.goto(target_url, wait_until="networkidle", timeout=45000)
+        page.goto(target_url, wait_until="domcontentloaded", timeout=10000)
         page.wait_for_timeout(2000)
 
         metrics = page.evaluate("""() => {

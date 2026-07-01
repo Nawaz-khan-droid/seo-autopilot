@@ -13,22 +13,24 @@ with multiple engines, collects metrics, and outputs 3 DOCX files:
 ```
 main.py               — CLI orchestrator (SERP pipeline, insights, reports)
 api/
-  main.py             — FastAPI server (endpoints for web UI)
-  audit_workflow.py   — core audit orchestrator (379 lines, was 1967)
-  crawl_engine.py     — tiered crawl: Playwright → cloud → pyseoanalyzer → urllib (527 lines)
-  parallel_fetch.py   — PSI, backlinks, GSC, GA4, SERP rankings, Trends, CWV (525 lines)
-  facts_assembler.py  — ReportFacts builder from crawl + API data (267 lines)
-  browser_manager.py  — Playwright TLS lifecycle (167 lines)
+  main.py             — FastAPI server (endpoints for web UI, ~749 lines)
+  audit_workflow.py   — core audit orchestrator + quick scan (~386 lines)
+  crawl_engine.py     — tiered crawl: Playwright → cloud → pyseoanalyzer → urllib (~780 lines)
+  parallel_fetch.py   — PSI, backlinks, GSC, GA4, SERP, Trends, CWV (~634 lines)
+  facts_assembler.py  — ReportFacts builder from crawl + API data (~276 lines)
+  browser_manager.py  — Playwright TLS lifecycle (~193 lines)
+  rate_limiter.py     — Redis-backed + in-memory fallback (~170 lines)
   error_resolver.py   — structured error classification and recovery
   data_cache.py       — JSON-based report cache with TTL expiry
 modules/
+  seo_rules/          — 269 CrawlForge-derived SEO rules (DuckDB in-memory)
   firecrawl_client.py — FirecrawlApp SDK wrapper (primary crawl engine)
   serp_client.py      — SerpApi rank tracking
   searchapi_client.py — SearchApi.io rank tracking
   apify_client.py     — Apify Google Search Scraper
   browseros_client.py — BrowserOS CDP client (Playwright-based)
   pagespeed_client.py — PageSpeed Insights API
-  backlink_client.py  — Ahrefs cache + Playwright scrape
+  backlink_client.py  — DuckDuckGo + OpenPageRank backlink finder
   search_console.py   — Google Search Console API
   ga4_client.py       — Google Analytics 4 Data API
   sheet_client.py     — Google Sheets read/write
@@ -37,7 +39,8 @@ modules/
   openrouter_client.py— OpenRouter LLM fallback
   niche_classifier.py — Multi-signal business niche detection
   client_memory.py    — Tavily-based client profile cache
-  url_utils.py        — Canonical URL matching
+  url_utils.py        — Canonical URL matching, SSRF guard
+  http_pool.py        — Shared HTTPX connection pool (sync + async)
   logger_config.py    — Logging setup
   pagespeed.py        — PSI auth strategy (API key → OAuth → unauthenticated)
 report/
@@ -62,24 +65,28 @@ output/              — Generated DOCX files land here
 ## Data Flow (Audit)
 
 ```
-1. run_audit(url, sheet_url, mode)
+0. _quick_page_scan(url) — HTTP + BS4, <5s, guaranteed (runs first in demo)
+
+1. _run_audit_impl(url, sheet_url, mode)
    │
    ├─ FirecrawlClient.scrape_page(url)        # Tier 1: Firecrawl
    │   └─ fallback: api.crawl_engine.run_local_opensource_seo_audit(url)
-   │       ├─ Playwright headless             # Tier 2a
+   │       ├─ Playwright headless (domcontentloaded)  # Tier 2a
    │       ├─ Cloud stealth browser           # Tier 2b
    │       ├─ pyseoanalyzer                   # Tier 3
    │       └─ urllib/BeautifulSoup            # Tier 4
    │
    ├─ api.parallel_fetch: _fetch_parallel(url)
    │   ├─ fetch_pagespeed_metrics(mobile/desktop)  # PSI scores
-   │   ├─ fetch_backlinks                          # Ahrefs cache
+   │   ├─ fetch_backlinks                          # DuckDuckGo + OPR
    │   ├─ _fetch_gsc_data                          # GSC API
    │   └─ _fetch_ga4_data                          # GA4 API
    ├─ api.crawl_engine: _check_link_health(hrefs)   # HTTP HEAD per link
-   ├─ api.parallel_fetch: _fetch_rankings_via_serp  # SerpApi rank check
+   ├─ api.parallel_fetch: _fetch_rankings_via_serp  # API cascade → Playwright → title fallback
    ├─ api.parallel_fetch: _fetch_google_trends      # SerpApi Trends
    ├─ api.parallel_fetch: _capture_serp_preview     # Playwright SERP screenshot
+   │
+   ├─ modules.seo_rules: run_seo_rules(url, local_metrics)  # 269 DuckDB rules
    │
    ├─ api.facts_assembler: _build_facts_from_audit  # Assemble ReportFacts
    ├─ api.facts_assembler: _ensure_facts_data       # Fill gaps with estimates
@@ -111,6 +118,16 @@ output/              — Generated DOCX files land here
 | 2026-06 | **API authentication** — new `APIKeyMiddleware` checks `X-API-Key` header on all `/api/` routes (except health + OPTIONS) | Configurable via `API_AUTH_KEY` env var — empty = disabled (local dev). |
 | 2026-06 | **CSV upload validation** — `_validate_backlink_csv()` checks header normalisation, encoding, and required columns (`total_backlinks` + `ref_domains` at minimum) | Prevents malformed or incorrect CSV files from being stored. |
 | 2026-06 | **uvicorn workers=4** — changed from `reload=True, workers=1` to `workers=4, reload=False` with `WEB_CONCURRENCY` env override | Enables concurrent request handling via forked processes. Each worker has independent thread-local state. |
+| 2026-07 | **CrawlForge rules integrated** — 269 rules cloned into `modules/seo_rules/`, DuckDB in-memory per audit | Issues feed into `TechnicalData.issues_list`, health score penalised by severity. Cap of 30 penalty points, rules issues count toward total `issues` count |
+| 2026-07 | **Quick scan guaranteed** — `_quick_page_scan()` via HTTP+BS4 runs before full audit in demo mode, stores immediately, persists on failure | Removes "all or nothing" failure mode. Sometimes returns "Missing H1/Meta/Alt" as quick issues |
+| 2026-07 | **Playwright crawl: `domcontentloaded`** replaces `networkidle` for CWV pages and crawl | 3-5s vs 30s+. SERP fallback unchanged. CWV Playwright timeout reduced from 45s→10s |
+| 2026-07 | **Redis rate limiter: sync `redis-py`** replaces broken `redis.asyncio` in sync context | `redis.asyncio` never awaited — rate limiter silently always returned `True`. Now uses sync client with `ping()` validation |
+| 2026-07 | **close_all_browsers race fixed** — iterates thread IDs under lock, clears set atomically | Previously modified set outside lock (race), only closed caller's TLS instead of tracking all threads |
+| 2026-07 | **Health score double-counting eliminated** — rules penalties applied once, not twice | Old code subtracted rules penalty THEN `len(issues_list)*5`. Now single capped penalty from issues + rules |
+| 2026-07 | **Job dict capped at 500 entries** — cleanup evicts oldest first when over limit | Prevents memory leak under heavy load |
+| 2026-07 | **DuckDB connection None-guard** — `init_database()` failure doesn't crash `finally: con.close()` | `con` initialised to `None`, only closed if not None |
+| 2026-07 | **Dead code removed** — `streamlit_app.py` deleted, Dockerfile/requirements.txt updated, git history cleaned of `secrets/supabase-ca.crt` + test DOCX files | filter-branch rewrote history (31→27 commits) |
+| 2026-07 | **Issues in API response** — `_generate_deliverables()` now includes `issues` array with `{page, issue_text, severity}` | Demo quick scan also generates basic issues for missing H1/Meta/Alt |
 
 ## Data Provenance
 
@@ -131,6 +148,14 @@ Use `_evi()` to get an integer value (returns 0 if missing).
 4. **Backlink cache staleness** — `backlink_client.py` uses a 7-day TTL JSON cache. Data may be outdated for weekly reports
 5. **Action plan only generates 2 tasks** — hardcoded generic tasks. Sheet-driven or LLM-generated plans are not implemented *(FIXED: now LLM-driven via GPT 120B SEO skill)*
 6. **The `import re` bug** — there was a local `import re` inside a loop in `audit_workflow.py` line 962 that shadowed the global import and caused `UnboundLocalError`. Already fixed — DO NOT reintroduce nested imports inside functions that also use the same module at the top level
+7. **Health score double-counting FIXED** (was: rules penalty + `len(issues)*5` applied twice)
+8. **Redis rate limiter FIXED** (was: `redis.asyncio` used in sync method, never awaited)
+9. **`git filter-branch` wiped working changes on 2026-07-01** — commit before running history rewrite. Uncommitted changes are lost
+10. **`streamlit_app.py` deleted** — was unused dead code. `streamlit` removed from `requirements.txt`, Dockerfile updated
+11. **Secrets in git history: NONE FOUND** (in this repo). Previous AGENTS.md claim was incorrect. `secrets/supabase-ca.crt` (public cert) and `scripts/_test_output/*.docx` purged from history
+12. **No additional cryptography needed** (PS-09) — SHA-256 for idempotency, `hmac.compare_digest` for API key, default TLS verification in httpx. Gap: TLS termination at reverse proxy layer (not app code)
+13. **CWV Playwright uses `domcontentloaded`** (not `networkidle`) — 10s timeout vs 45s. May miss late-loading resources
+14. **269 SEO rules: 92 issues typical on real sites** — 0 critical, ~30 warning, ~62 info. Health score penalised max 30 points from rules
 
 ## Common Runtime Errors & Fixes
 
@@ -185,4 +210,11 @@ For the next agent working on this codebase:
 8. **The SERP rank tracking** has a full multi-provider pipeline in `orchestrator/serp_snapshot.py` that is NOT integrated into the audit workflow — it could be wired in for richer keyword data
 9. **`_secure_context(browser)` in `api/browser_manager.py`** creates a new isolated Playwright context per page call. If adding a new Playwright page user, always go through `_get_browser_page()` (not `browser.new_page()` directly) to get security hardening
 10. **CAPTCHA telemetry** at `output/captcha_telemetry.json` — if the success rate drops below 50%, consider integrating a paid CAPTCHA solving service (2captcha, Capsolver) in `_capture_serp_preview()` before the CAPTCHA detection check
-11. **Phase 2 extraction pattern** — `audit_workflow.py` was 1967 lines, now 379. Extracted modules (`crawl_engine.py`, `parallel_fetch.py`, `facts_assembler.py`, `browser_manager.py`) import back into `audit_workflow.py`. To add more extractions, create new `api/*.py` modules and import them — never inline new code into `audit_workflow.py` directly. The remaining orchestrator functions (`run_audit`, `_run_audit_impl`) are the only code that should remain there.
+11. **Phase 2 extraction pattern** — `audit_workflow.py` was 1967 lines, now ~386. Extracted modules import back into `audit_workflow.py`. To add more extractions, create new `api/*.py` modules and import them — never inline new code into `audit_workflow.py` directly.
+12. **Rules engine** (`modules/seo_rules/_runner.py:run_seo_rules()`) runs after `run_local_opensource_seo_audit()` in `_run_audit_impl()`. Takes crawl_data dict, returns list of issue dicts. Populates DuckDB in-memory, runs all 269 rules, exports issues. Call already wired: `audit_workflow.py:368`
+13. **`_build_facts_from_audit()`** accepts `seo_rules_issues` kwarg (list of dicts). Issues merged into `facts.technical.issues_list`. Health score penalised by severity: `critical/warning`=3pts, `info`=1pt, capped at 30pts total. Does NOT double-count issues (was fixed 2026-07-01)
+14. **`_quick_page_scan()`** in `audit_workflow.py` is the guaranteed <5s HTTP+BS4 scan. Used by demo mode (`main.py:_run_demo_background()`) as immediate result before full audit enriches. Never throws — always returns at least default metrics with `health_score=85`
+15. **API response `issues` array** — `_generate_deliverables()` appends `issues: [{page, issue_text, severity}]` from `facts.technical.issues_list`. Quick scan also generates basic issues for missing H1/Meta/Alt
+16. **Rate limiter** uses sync `redis-py` (not `redis.asyncio`). Falls back to in-memory. `_check_redis()` uses `zremrangebyscore → zcard → zadd → expire` pattern
+17. **Use `python -m pytest tests/ -x -q -k "not perf and not guardrail"`** to run tests. The `-k "not perf"` skips tests needing localhost:8000. Guardrail tests need specific PPT internals
+18. **`git filter-branch` hazard** — always commit before rewriting history. Uncommitted changes are permanently lost

@@ -48,9 +48,6 @@ reportlab>=4.1.0
 httpx>=0.27.0
 filelock>=3.13.0
 
-# Streamlit UI
-streamlit>=1.35.0
-
 # SEO analysis (Tier 3 fallback — pins strict deps, may conflict with CVE fixes)
 # pyseoanalyzer pinned langchain==0.3.22, lxml==5.3.1, urllib3==2.3.0, dotenv==1.1.0
 # which conflict with security updates above. Install with --no-deps if needed.

@@ -22,11 +22,11 @@ from typing import Any
 import httpx
 
 try:
-    import redis.asyncio as aioredis
-    _REDIS_AVAILABLE = True
+    import redis as sync_redis
+    _REDIS_SYNC_AVAILABLE = True
 except ImportError:
-    aioredis = None  # type: ignore[assignment]
-    _REDIS_AVAILABLE = False
+    sync_redis = None  # type: ignore[assignment]
+    _REDIS_SYNC_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,6 @@ class RateLimiter:
         self.window = window_seconds
         self._upstash_url = ""
         self._upstash_token = ""
-        self._redis_available = False
         self._redis_client: Any = None
         self._mode = "memory"
         self._buckets: dict[str, list[float]] = defaultdict(list)
@@ -61,21 +60,22 @@ class RateLimiter:
 
         if redis_url:
             try:
-                if not _REDIS_AVAILABLE or aioredis is None:
-                    raise ImportError("redis.asyncio not available")
-                self._redis_client = aioredis.from_url(
+                if not _REDIS_SYNC_AVAILABLE or sync_redis is None:
+                    raise ImportError("redis not available")
+                self._redis_client = sync_redis.from_url(
                     redis_url,
                     encoding="utf-8",
                     decode_responses=True,
                     socket_connect_timeout=1,
                     socket_timeout=1,
                 )
+                self._redis_client.ping()
                 self._mode = "redis"
-                self._redis_available = True
                 logger.info("Rate limiter: using local Redis (%s)", redis_url)
                 return
             except Exception as e:
                 logger.warning("Rate limiter: local Redis unavailable (%s)", e)
+                self._redis_client = None
 
         if upstash_url and upstash_token:
             self._upstash_url = upstash_url.rstrip("/")
@@ -93,22 +93,18 @@ class RateLimiter:
             return self._check_upstash(ip)
         return self._check_memory(ip)
 
-    # ── Local Redis (redis-py) ──
+    # ── Local Redis (sync redis-py) ──
 
     def _check_redis(self, ip: str) -> bool:
         try:
-            if not _REDIS_AVAILABLE or aioredis is None:
-                raise ImportError("redis.asyncio not available")
             key = f"ratelimit:{ip}"
             now = time.time()
             cutoff = now - self.window
 
-            pipe = self._redis_client.pipeline()
-            pipe.zremrangebyscore(key, 0, cutoff)
-            pipe.zcard(key)
-            pipe.zadd(key, {str(now): now})
-            pipe.expire(key, self.window + 10)
-            _, count, _, _ = pipe.execute()
+            self._redis_client.zremrangebyscore(key, 0, cutoff)
+            count = self._redis_client.zcard(key)
+            self._redis_client.zadd(key, {str(now): now})
+            self._redis_client.expire(key, self.window + 10)
 
             return int(count) < self.max_requests
         except Exception as e:

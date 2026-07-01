@@ -147,6 +147,10 @@ def _job_get(job_id: str) -> dict[str, Any] | None:
 def _job_cleanup() -> None:
     cutoff = time.time() - 3600
     with _jobs_lock:
+        if len(_jobs) > 500:
+            stale = sorted(_jobs.keys(), key=lambda k: _jobs[k].get("updated_at", 0))[:-200]
+            for k in stale:
+                del _jobs[k]
         stale = [k for k, v in _jobs.items() if v.get("updated_at", 0) < cutoff]
         for k in stale:
             del _jobs[k]
@@ -596,11 +600,19 @@ def _run_demo_background(job_id: str, url: str) -> None:
     from api.audit_workflow import _quick_page_scan, run_audit as _run_audit
     # Step 1: Quick scan (guaranteed, <5s) → store as initial result
     quick = _quick_page_scan(url)
+    _quick_issues = []
+    if quick.get("missing_h1_count", 0):
+        _quick_issues.append({"page": url, "issue_text": "Missing H1 tag", "severity": "Warning"})
+    if quick.get("missing_meta_tags", 0):
+        _quick_issues.append({"page": url, "issue_text": "Missing meta description", "severity": "Warning"})
+    if quick.get("missing_alt_tags", 0):
+        _quick_issues.append({"page": url, "issue_text": f"{quick['missing_alt_tags']} images missing alt text", "severity": "Warning"})
     _job_set(job_id, status="done", progress="Scan complete — enriching...", result={
         "success": True,
         "client": url,
         "month": datetime.now().strftime("%B %Y"),
         "metrics": quick,
+        "issues": _quick_issues,
         "niche": "—",
     })
     # Step 2: Full audit (may take 60-120s, may fail)

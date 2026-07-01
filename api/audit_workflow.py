@@ -20,6 +20,7 @@ from api.facts_assembler import (
     _build_facts_from_audit, _ensure_facts_data, _try_open_sheet,
 )
 from modules.firecrawl_client import FirecrawlClient, CrawledPage, CrawlResult
+from modules.seo_rules import run_seo_rules
 from report.docx_technical_audit import build_technical_audit
 from report.docx_report import build_clients_report
 from report.docx_action_plan import build_action_plan_docx
@@ -256,6 +257,10 @@ def _generate_deliverables(
         "metrics": final_metrics,
         "niche": client_memory.get("niche", client_memory.get("business_type", "")),
         "client": client_name,
+        "issues": [
+            {"page": i.page, "issue_text": i.issue_text, "severity": i.severity}
+            for i in facts.technical.issues_list
+        ],
     }
     if generated:
         result["download_url"] = f"/api/reports/download/{generated[0]['filename']}"
@@ -366,6 +371,9 @@ def _run_audit_impl(
             crawl_result = CrawlResult(pages=[], total_pages=0)
         sheet_tabs = _try_open_sheet(sheet_url) if sheet_url else None
 
+    # ── SEO Rules Engine (269 rules, DuckDB-backed) ──
+    seo_rules_issues = run_seo_rules(url, local_metrics)
+
     # ── Shared facts assembly ──
     facts = _build_facts_from_audit(
         url, crawl_result, sheet_tabs, month,
@@ -373,6 +381,7 @@ def _run_audit_impl(
         pagespeed_mobile=psi_mobile, pagespeed_desktop=psi_desktop,
         backlinks_data=backlinks_data, link_health_data=link_health_data,
         gsc_data=gsc_data, ga4_data=ga4_data,
+        seo_rules_issues=seo_rules_issues,
     )
 
     return _generate_deliverables(

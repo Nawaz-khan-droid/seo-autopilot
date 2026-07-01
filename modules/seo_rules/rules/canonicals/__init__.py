@@ -1,0 +1,33 @@
+"""Canonicals rules."""
+
+from modules.seo_rules.rules.canonicals import base_url_malformed  # noqa: F401
+from modules.seo_rules.rules.canonicals import base_url_multiple  # noqa: F401
+from modules.seo_rules.rules.canonicals import base_url_multiple_mismatched  # noqa: F401
+from modules.seo_rules.rules.canonicals import canonical_chain  # noqa: F401
+from modules.seo_rules.rules.canonicals import canonical_contains_fragment  # noqa: F401
+from modules.seo_rules.rules.canonicals import canonical_html_and_header  # noqa: F401
+from modules.seo_rules.rules.canonicals import canonical_html_vs_header_mismatch  # noqa: F401
+from modules.seo_rules.rules.canonicals import canonical_invalid_attribute  # noqa: F401
+from modules.seo_rules.rules.canonicals import canonical_loop  # noqa: F401
+from modules.seo_rules.rules.canonicals import canonical_malformed_or_empty  # noqa: F401
+from modules.seo_rules.rules.canonicals import canonical_missing  # noqa: F401
+from modules.seo_rules.rules.canonicals import canonical_multiple  # noqa: F401
+from modules.seo_rules.rules.canonicals import canonical_multiple_conflicting  # noqa: F401
+from modules.seo_rules.rules.canonicals import canonical_only_in_rendered_dom  # noqa: F401
+from modules.seo_rules.rules.canonicals import canonical_outside_head  # noqa: F401
+from modules.seo_rules.rules.canonicals import canonical_relative  # noqa: F401
+from modules.seo_rules.rules.canonicals import canonical_render_vs_source_mismatch  # noqa: F401
+from modules.seo_rules.rules.canonicals import canonical_superfluous_attrs  # noqa: F401
+from modules.seo_rules.rules.canonicals import canonical_to_3xx  # noqa: F401
+from modules.seo_rules.rules.canonicals import canonical_to_4xx  # noqa: F401
+from modules.seo_rules.rules.canonicals import canonical_to_5xx  # noqa: F401
+from modules.seo_rules.rules.canonicals import canonical_to_different_internal  # noqa: F401
+from modules.seo_rules.rules.canonicals import canonical_to_disallowed  # noqa: F401
+from modules.seo_rules.rules.canonicals import canonical_to_external  # noqa: F401
+from modules.seo_rules.rules.canonicals import canonical_to_homepage  # noqa: F401
+from modules.seo_rules.rules.canonicals import canonical_to_http  # noqa: F401
+from modules.seo_rules.rules.canonicals import canonical_to_https  # noqa: F401
+from modules.seo_rules.rules.canonicals import canonical_to_noindex  # noqa: F401
+from modules.seo_rules.rules.canonicals import canonical_to_non_indexable  # noqa: F401
+from modules.seo_rules.rules.canonicals import canonical_unlinked  # noqa: F401
+from modules.seo_rules.rules.canonicals import canonicalised  # noqa: F401

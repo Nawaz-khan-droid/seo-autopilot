@@ -22,7 +22,7 @@ COPY modules/ modules/
 COPY report/ report/
 COPY orchestrator/ orchestrator/
 COPY scripts/ scripts/
-COPY main.py run_report.py streamlit_app.py requirements.txt ./
+COPY main.py run_report.py requirements.txt ./
 COPY db/init.sql db/init.sql
 
 # Expose FastAPI port

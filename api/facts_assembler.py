@@ -69,6 +69,7 @@ def _build_facts_from_audit(
     link_health_data: dict[str, Any] | None = None,
     gsc_data: dict | None = None,
     ga4_data: dict | None = None,
+    seo_rules_issues: list[dict[str, Any]] | None = None,
 ) -> ReportFacts:
     facts = ReportFacts(
         metadata=ReportMetadata(
@@ -166,14 +167,20 @@ def _build_facts_from_audit(
         if page.markdown and not re.search(r'^# ', page.markdown, re.MULTILINE):
             missing_h1 += 1
 
-    health_value = None
-    if health_base is not None:
-        try:
-            health_value = str(max(25, min(100, int(health_base) - len(issues_list) * 5)))
-        except (ValueError, TypeError):
-            pass
+    if seo_rules_issues:
+        rules_penalty = min(sum(3 for i in seo_rules_issues if i.get("severity") in ("critical", "warning")) +
+                            sum(1 for i in seo_rules_issues if i.get("severity") == "info"), 30)
+        health_base = (health_base or 85) - rules_penalty
+        for ri in seo_rules_issues:
+            issues_list.append(TechnicalIssue(
+                page=ri.get("url", url),
+                issue_text=f"[{ri['rule_id']}] {ri['message']}" if ri.get("message") else ri.get("rule_id", "SEO Issue"),
+                severity=ri.get("severity", "info").capitalize(),
+            ))
+
+    health_value = str(max(25, min(100, int(health_base)))) if health_base is not None else None
     facts.technical = TechnicalData(
-        health_score=Evidence.verified(health_value, "SEO Analyzer + Firecrawl") if health_value else Evidence.missing(),
+        health_score=Evidence.verified(health_value, "SEO Rules Engine (269 rules)") if health_value else Evidence.missing(),
         pages_audited=Evidence.verified(str(total_pages), "SEO Analyzer + Firecrawl"),
         total_issues=Evidence.verified(str(len(issues_list)), "SEO Analyzer + Firecrawl"),
         missing_h1=Evidence.verified(str(missing_h1), "SEO Analyzer + Firecrawl"),

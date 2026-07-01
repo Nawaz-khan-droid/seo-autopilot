@@ -179,17 +179,14 @@ def _close_browser() -> None:
 
 def close_all_browsers() -> None:
     """Close Playwright browsers from all tracked threads.
-    Safe to call from any thread (e.g. lifespan shutdown handler)."""
+    Live threads self-clean on request end; dead threads are cleaned by OS."""
     with _BROWSER_LOCK:
         thread_ids = list(_ACTIVE_BROWSER_THREAD_IDS)
-    for tid in thread_ids:
-        found = False
-        for thread in threading.enumerate():
-            if thread.ident == tid:
-                found = True
-                logger.info("Closing Playwright on thread %s (%s)", thread.name, tid)
-                break
-        if not found:
-            logger.debug("Thread %s already dead — browser will be cleaned by OS", tid)
-            _ACTIVE_BROWSER_THREAD_IDS.discard(tid)
+        _ACTIVE_BROWSER_THREAD_IDS.clear()
+    alive = {t.ident for t in threading.enumerate() if t.ident in thread_ids}
+    dead = [tid for tid in thread_ids if tid not in alive]
+    for tid in dead:
+        logger.debug("Thread %s already dead — browser will be cleaned by OS", tid)
+    for tid in alive:
+        logger.info("Skipping alive thread %s — browser will self-close on request end", tid)
     _close_browser()
