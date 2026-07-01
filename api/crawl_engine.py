@@ -432,6 +432,38 @@ def _extract_seo_via_urllib(target_url: str) -> dict[str, Any]:
 
 # ── Link health check ──
 
+def _discover_internal_links(target_url: str) -> list[str]:
+    """Extract all internal links from a page via Playwright."""
+    if not PLAYWRIGHT_AVAILABLE:
+        return []
+    page = _get_browser_page()
+    if page is None:
+        return []
+    links: list[str] = []
+    try:
+        if STEALTH_AVAILABLE and _STEALTH_HOOK is not None:
+            _STEALTH_HOOK.apply_stealth_sync(page)
+        page.goto(target_url, wait_until="domcontentloaded", timeout=15000)
+        page.wait_for_timeout(1000)
+        links = page.evaluate("""() => {
+            const links = [];
+            document.querySelectorAll('a[href]').forEach(a => {
+                const href = a.href;
+                if (href && href.startsWith('http')) links.push(href);
+            });
+            return [...new Set(links)];
+        }""") or []
+        logger.info("Discovered %d links on %s", len(links), target_url)
+    except Exception as e:
+        logger.debug("Link discovery failed for %s: %s", target_url, e)
+    finally:
+        try:
+            page.close()
+        except Exception:
+            pass
+    return links
+
+
 def _check_link_health(links: list[str], base_url: str) -> dict[str, Any]:
     domain = _domain_from_url(base_url)
     internal_links: list[str] = []
@@ -517,6 +549,42 @@ def run_local_opensource_seo_audit(target_url: str, crawl_mode: str = "single") 
                     raw = output
         except Exception as e:
             logger.warning("pyseoanalyzer failed: %s", e)
+
+    # Playwright multi-page crawl when full mode requested and no multi-page data yet
+    if crawl_mode == "full" and PLAYWRIGHT_AVAILABLE:
+        existing_pages = raw.get("pages", [])
+        if len(existing_pages) <= 1:
+            logger.info("Playwright full crawl: discovering internal links for %s", target_url)
+            internal_links = _discover_internal_links(target_url)
+            # Filter to same domain, skip already-crawled
+            from urllib.parse import urlparse
+            base_domain = urlparse(target_url).netloc.lower().replace("www.", "")
+            to_crawl = []
+            seen_urls = {target_url.rstrip("/")}
+            for link in internal_links:
+                link_domain = urlparse(link).netloc.lower().replace("www.", "")
+                if link_domain == base_domain and link.rstrip("/") not in seen_urls:
+                    to_crawl.append(link)
+                    seen_urls.add(link.rstrip("/"))
+            to_crawl = to_crawl[:14]  # Max 15 total pages (1 already crawled)
+            if to_crawl:
+                logger.info("Playwright full crawl: %d additional pages to crawl", len(to_crawl))
+                pages_list = list(existing_pages) if existing_pages else []
+                for crawl_url in to_crawl:
+                    try:
+                        page_data = _run_playwright_headless(crawl_url)
+                        if page_data:
+                            pages_list.append({
+                                "url": crawl_url,
+                                "title": page_data.get("title", ""),
+                                "description": page_data.get("meta_description", ""),
+                                "text": "",
+                                "warnings": [],
+                            })
+                    except Exception as e:
+                        logger.debug("Playwright crawl of %s failed: %s", crawl_url, e)
+                raw["pages"] = pages_list
+                logger.info("Playwright full crawl complete: %d pages total", len(pages_list))
 
     if not raw:
         logger.info("Crawl tier: 4 — urllib/BeautifulSoup for %s", target_url)

@@ -359,7 +359,12 @@ def _run_audit_impl(
 
     # ── Branch: crawl source (only unique part per path) ──
     if not fc.available:
-        logger.info("Firecrawl not available — using local analyzer only")
+        logger.info("Firecrawl not available — using local analyzer only (mode=%s)", mode)
+        if mode == "full":
+            # Re-run the crawler in full mode to discover more pages
+            local_metrics = run_local_opensource_seo_audit(url, crawl_mode="full")
+            defensive_payload = build_defensive_audit_payload(url, local_metrics)
+            final_metrics = dict(defensive_payload)
         raw_pages = local_metrics.get("_pages", []) or []
         if raw_pages:
             parsed_pages: list[CrawledPage] = []
