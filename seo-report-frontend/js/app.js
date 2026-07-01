@@ -215,7 +215,16 @@ document.addEventListener('DOMContentLoaded', () => {
 /* ── DEMO – Live Audit on Any URL ── */
 async function runDemo() {
   const urlInput = document.getElementById('demo-url');
-  const url = urlInput ? urlInput.value.trim() : 'https://www.joinabound.com';
+  const url = urlInput ? urlInput.value.trim() : '';
+
+  if (!url) {
+    showStatus('demo-status', 'Please enter a URL to analyze.', 'error');
+    return;
+  }
+  if (!url.startsWith('http')) {
+    showStatus('demo-status', 'Please enter a valid URL starting with https://', 'error');
+    return;
+  }
 
   showStatus('demo-status', `Starting live audit of ${url}...`, 'info');
   hideProgress('demo-');
