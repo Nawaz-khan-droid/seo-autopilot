@@ -618,14 +618,19 @@ def _run_demo_background(job_id: str, url: str) -> None:
     # Step 2: Full audit (may take 60-120s, may fail)
     try:
         result = _run_audit(url)
-        metrics = result.get("metrics", {})
-        # Merge full audit metrics into quick scan (full audit wins)
-        quick.update(metrics)
+        full_metrics = result.get("metrics", {})
+        # Merge: start from quick scan, then overlay non-empty full audit values.
+        # This ensures full-audit enriched rankings/backlinks/CWV win over quick-scan zeros.
+        enriched = dict(quick)
+        for k, v in full_metrics.items():
+            if v not in (None, 0, "", "No Data", "Data Pending"):
+                enriched[k] = v
         _job_set(job_id, status="done", result={
             "success": result.get("success", True),
             "client": result.get("client", url),
             "month": result.get("month", datetime.now().strftime("%B %Y")),
-            "metrics": quick,
+            "metrics": enriched,
+            "issues": result.get("issues", []),
             "niche": result.get("niche", "—"),
         })
     except Exception as e:

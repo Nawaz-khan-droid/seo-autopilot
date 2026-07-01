@@ -447,6 +447,19 @@ def _fetch_rankings_via_serp(
             except Exception as e:
                 logger.debug("Playwright SERP fallback failed for '%s': %s", kw, e)
 
+    # Fallback: when keywords were discovered but no rank positions found,
+    # still return them so keywords_tracked > 0 in the dashboard.
+    if not rows and keywords:
+        logger.info("No rank data available for %s — returning %d discovered keywords as fallback",
+                     domain, len(keywords))
+        for kw in keywords[:10]:
+            rows.append(RankingRow(
+                keyword=kw,
+                position=Evidence.missing(),
+                search_volume=0,
+                competition="medium",
+            ))
+
     logger.info("SERP rank check: %d/%d keywords for %s", len(rows), len(keywords[:15]), domain)
     return rows
 

@@ -278,6 +278,19 @@ def _run_audit_impl(
     month = report_month or datetime.now().strftime("%B %Y")
     fc = FirecrawlClient()
 
+    # Log API key status so missing config is visible in logs
+    import os as _os
+    _key_status = {
+        "SERPAPI_KEY": bool(_os.environ.get("SERPAPI_KEY")),
+        "SEARCHAPI_API_KEY": bool(_os.environ.get("SEARCHAPI_API_KEY")),
+        "APIFY_API_KEY": bool(_os.environ.get("APIFY_API_KEY")),
+        "GROQ_API_KEY": bool(_os.environ.get("GROQ_API_KEY")),
+        "PAGESPEED_API_KEY": bool(_os.environ.get("PAGESPEED_API_KEY")),
+    }
+    _configured = [k for k, v in _key_status.items() if v]
+    _missing = [k for k, v in _key_status.items() if not v]
+    logger.info("API keys configured: %s | missing: %s", _configured or "none", _missing or "none")
+
     local_metrics = run_local_opensource_seo_audit(url, crawl_mode=mode)
     defensive_payload = build_defensive_audit_payload(url, local_metrics)
 
